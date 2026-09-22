@@ -25,30 +25,29 @@ Count as Mobile
 
 ## Install
 
-Requires SwiftBar: `brew install --cask swiftbar`.
-
-**From a release** — download the latest `macos-universal` archive from
-[Releases](https://github.com/Carlos-err406/data-usage/releases), then:
+Requires [SwiftBar](https://swiftbar.app) and a Rust toolchain:
 
 ```bash
-tar -xzf data-usage-*-macos-universal.tar.gz
-cd data-usage-*-macos-universal
-./install.sh
+brew install --cask swiftbar
 ```
 
-**From source** — needs a Rust toolchain:
+Then:
 
 ```bash
-./install.sh
+curl -fsSL https://raw.githubusercontent.com/Carlos-err406/data-usage/main/install.sh | bash
 ```
 
-Either way the binary lands in `~/.local/bin/data-usage` and a plugin wrapper in
-your SwiftBar plugin folder. Open SwiftBar, or pick **Refresh All** from its
-menu, to load it.
+That fetches the source into a temporary directory, builds it, and installs the
+binary to `~/.local/bin/data-usage` with a plugin wrapper in your SwiftBar
+plugin folder. Open SwiftBar, or pick **Refresh All** from its menu, to load it.
 
-The two install scripts are not the same: the one at the repo root builds from
-source, while `packaging/install.sh` (shipped inside the archive) installs the
-prebuilt binary and clears its quarantine flag.
+The same script works from a checkout, where it builds in place instead:
+
+```bash
+git clone https://github.com/Carlos-err406/data-usage.git
+cd data-usage
+./install.sh
+```
 
 ## How mobile data is detected
 
@@ -153,26 +152,13 @@ data-usage set-class en0 mobile          # pin an interface
 data-usage set-class en0 auto            # clear the pin
 ```
 
-## Releasing
+## Development
 
-CI runs on every push and pull request to `main` — fmt, clippy with
-`-D warnings`, tests, release build. **It never publishes anything.**
-
-A release happens only when a version tag is pushed:
+CI runs on every push and pull request to `main`: `cargo fmt --check`, clippy
+with `-D warnings`, tests, and a release build.
 
 ```bash
-# bump the version in Cargo.toml first, and commit it
-git tag v0.1.0
-git push origin v0.1.0
+cargo fmt --all
+cargo clippy --all-targets -- -D warnings
+cargo test
 ```
-
-The release workflow refuses to run if the tag and the `Cargo.toml` version
-disagree, which is the easy way to ship a binary that misreports itself.
-
-It builds `aarch64` and `x86_64`, joins them with `lipo` into one universal
-binary with a deployment target of macOS 11, ad-hoc signs it, and attaches a
-`.tar.gz` plus a SHA-256 checksum to a GitHub release.
-
-Releases are **not notarised** — that needs a paid Apple Developer ID. macOS
-quarantines the archive on download, and the bundled `install.sh` clears the
-flag on the way in.

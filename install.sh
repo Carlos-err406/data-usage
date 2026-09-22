@@ -1,22 +1,44 @@
 #!/bin/bash
 # Build and install the menu bar plugin.
+#
+# Works two ways: run from a checkout, or piped straight from the web, in which
+# case it fetches the source into a temporary directory and cleans up after.
+#
+#   curl -fsSL https://raw.githubusercontent.com/Carlos-err406/data-usage/main/install.sh | bash
 set -euo pipefail
 
+REPO="https://github.com/Carlos-err406/data-usage.git"
 BIN_DIR="$HOME/.local/bin"
-PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/.config/swiftbar")"
 
-if [ ! -d "/Applications/SwiftBar.app" ]; then
-  echo "SwiftBar is not installed. Install it with:  brew install --cask swiftbar" >&2
-  exit 1
+die() { echo "$1" >&2; exit 1; }
+
+[ -d /Applications/SwiftBar.app ] ||
+  die "SwiftBar is not installed. Install it with:  brew install --cask swiftbar"
+command -v cargo >/dev/null ||
+  die "Rust is not installed. Get it from https://rustup.rs"
+
+# Identify a checkout by the manifest, not just any Cargo.toml that happens to
+# be in the working directory when this is piped from curl.
+if [ -f Cargo.toml ] && grep -q '^name = "data-usage"' Cargo.toml 2>/dev/null; then
+  SRC="$PWD"
+else
+  command -v git >/dev/null || die "git is required to fetch the source"
+  SRC="$(mktemp -d)"
+  trap 'rm -rf "$SRC"' EXIT
+  echo "Fetching source..."
+  git clone --depth 1 --quiet "$REPO" "$SRC"
 fi
 
-echo "Building release binary…"
-cargo build --release
+echo "Building..."
+cargo build --release --manifest-path "$SRC/Cargo.toml"
 
+# SwiftBar's plugin folder is configurable; ask it before guessing.
+PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/.config/swiftbar")"
 mkdir -p "$BIN_DIR" "$PLUGIN_DIR"
-install -m 755 target/release/data-usage "$BIN_DIR/data-usage"
-install -m 755 plugin/datausage.1s.sh "$PLUGIN_DIR/datausage.1s.sh"
+install -m 755 "$SRC/target/release/data-usage" "$BIN_DIR/data-usage"
+install -m 755 "$SRC/plugin/datausage.1s.sh" "$PLUGIN_DIR/datausage.1s.sh"
 
+echo
 echo "Installed:"
 echo "  $BIN_DIR/data-usage"
 echo "  $PLUGIN_DIR/datausage.1s.sh"
