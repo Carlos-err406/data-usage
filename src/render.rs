@@ -67,7 +67,7 @@ fn class_symbol(c: Class) -> &'static str {
 /// The menu bar title — live throughput only.
 pub fn title(rate: Rate) -> String {
     format!(
-        "↓ {}  ↑ {} | {BAR_FONT}",
+        "↓{} ↑{} | {BAR_FONT}",
         units::rate(rate.rx),
         units::rate(rate.tx)
     )
@@ -187,14 +187,16 @@ fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
         let _ = writeln!(s, "  no traffic recorded yet | size=11 color=#8E8E93");
         return;
     }
-    let light = b64(&chart::bars(series, w, h, &chart::LIGHT));
-    let dark = b64(&chart::bars(series, w, h, &chart::DARK));
-    let _ = writeln!(s, " | image={light},{dark}");
+    // `width`/`height` are undocumented in SwiftBar's README but honoured in
+    // MenuLineParameters.resizedImageIfRequested. Both are required: omit
+    // either and the image collapses to a few pixels.
+    let png = b64(&chart::bars(series, w, h, &chart::PALETTE));
+    let _ = writeln!(s, " | image={png} width={w} height={h}");
 }
 
 /// A first-run placeholder so the menu never looks broken.
 pub fn boot_title() -> String {
-    format!("↓ – ↑ – | {BAR_FONT}")
+    format!("↓– ↑– | {BAR_FONT}")
 }
 
 #[cfg(test)]

@@ -8,10 +8,15 @@ use crate::store::{Store, Totals, bucket_of};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-/// Traffic that happened while we weren't running is only counted if the gap
-/// was short. Past this, we silently resync — otherwise starting the app after
-/// a week would dump a week of bytes into the current minute and call it today.
-const MAX_CATCHUP_GAP: i64 = 300;
+/// Traffic that happened while we weren't sampling is only counted if the gap
+/// was short. Past this we silently resync — otherwise starting the app after a
+/// week would dump a week of bytes into the current minute and call it today.
+///
+/// An hour is generous on purpose: SwiftBar defers a plugin refresh while its
+/// menu is open, and the machine sleeps, so ordinary gaps are minutes long and
+/// the traffic in them is real. A gap longer than this is the app having been
+/// off, where the counters have usually been reset by a reboot anyway.
+const MAX_CATCHUP_GAP: i64 = 3600;
 
 #[derive(Default, Clone, Copy)]
 pub struct Rate {
@@ -23,6 +28,10 @@ pub struct Sampler {
     pub store: Store,
     last: HashMap<String, (u64, u64)>,
     window: Vec<(i64, u64, u64)>,
+    /// Seconds covered by the last on-disk checkpoint, and the bytes seen over
+    /// it. This is how a short-lived refresh run derives a rate: it has no
+    /// history of its own to difference against.
+    checkpoint: Option<(f64, u64, u64)>,
     net_ids: netid::Cache,
     /// None when another instance already holds the accounting lock, in which
     /// case this sampler reads and displays but never writes.
@@ -45,6 +54,7 @@ impl Sampler {
             store,
             last: HashMap::new(),
             window: Vec::new(),
+            checkpoint: None,
             net_ids: netid::Cache::default(),
             lock: crate::lock::acquire(),
         }
@@ -84,6 +94,8 @@ impl Sampler {
         let accounting = self.is_accounting();
         let mut added = Totals::new();
         let mut seen: Vec<(String, u64, u64)> = Vec::new();
+        // Oldest checkpoint we resumed from this tick, for the rate fallback.
+        let mut resumed_from: Option<i64> = None;
         for c in &counters {
             let pin = net_keys
                 .get(&c.name)
@@ -101,8 +113,14 @@ impl Sampler {
                 // Only the accounting instance resumes from a stored checkpoint;
                 // a read-only one must not claim traffic it isn't recording.
                 None if accounting => match self.store.iface_state(&c.name) {
-                    // Only trust a checkpoint from the recent past.
-                    Ok(Some((rx, tx, at))) if now - at <= MAX_CATCHUP_GAP => Some((rx, tx)),
+                    // Only trust a checkpoint from the recent past. Note this
+                    // deliberately accepts a zero-second gap: two refreshes can
+                    // land in the same wall-clock second, and those bytes are
+                    // still real. Only the rate needs a non-zero span.
+                    Ok(Some((rx, tx, at))) if now - at <= MAX_CATCHUP_GAP => {
+                        resumed_from = Some(resumed_from.map_or(at, |p: i64| p.min(at)));
+                        Some((rx, tx))
+                    }
                     _ => None,
                 },
                 None => None,
@@ -130,6 +148,11 @@ impl Sampler {
         let (rx, tx) = added
             .values()
             .fold((0u64, 0u64), |a, b| (a.0 + b.0, a.1 + b.1));
+        if let Some(at) = resumed_from {
+            // Floor the span at one second: a same-second gap would otherwise
+            // divide by zero, and a clock stepping backwards would go negative.
+            self.checkpoint = Some(((now - at).max(1) as f64, rx, tx));
+        }
         self.window.push((now, rx, tx));
         self.window.retain(|(t, _, _)| now - t < 3);
         added
@@ -138,7 +161,15 @@ impl Sampler {
     /// Throughput over the last few seconds, in bytes/sec.
     pub fn rate(&self) -> Rate {
         if self.window.len() < 2 {
-            return Rate::default();
+            // A refresh run lives for milliseconds and never builds a window,
+            // so it measures against the checkpoint the previous run left.
+            return match self.checkpoint {
+                Some((span, rx, tx)) if span > 0.0 => Rate {
+                    rx: rx as f64 / span,
+                    tx: tx as f64 / span,
+                },
+                _ => Rate::default(),
+            };
         }
         let span = (self.window.last().unwrap().0 - self.window[0].0).max(1) as f64;
         // The first entry is the baseline for the span, so its bytes fall outside it.

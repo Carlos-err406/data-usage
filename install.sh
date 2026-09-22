@@ -36,11 +36,16 @@ cargo build --release --manifest-path "$SRC/Cargo.toml"
 PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || echo "$HOME/.config/swiftbar")"
 mkdir -p "$BIN_DIR" "$PLUGIN_DIR"
 install -m 755 "$SRC/target/release/data-usage" "$BIN_DIR/data-usage"
-install -m 755 "$SRC/plugin/datausage.1s.sh" "$PLUGIN_DIR/datausage.1s.sh"
+
+# Drop any previously installed copy first. The refresh interval lives in the
+# filename, so an old one under a different interval would otherwise be left
+# behind and SwiftBar would run both.
+rm -f "$PLUGIN_DIR"/datausage.*.sh
+install -m 755 "$SRC"/plugin/datausage.*.sh "$PLUGIN_DIR/"
 
 echo
 echo "Installed:"
 echo "  $BIN_DIR/data-usage"
-echo "  $PLUGIN_DIR/datausage.1s.sh"
+echo "  $PLUGIN_DIR/$(basename "$SRC"/plugin/datausage.*.sh)"
 echo
 echo "Open SwiftBar (or Refresh All in its menu) to pick up the plugin."

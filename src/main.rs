@@ -89,15 +89,19 @@ fn cmd_stream() {
     }
 }
 
-/// Render one menu and exit — handy for testing, and a usable fallback if the
-/// plugin is ever installed without the streamable metadata tag.
+/// Render one menu and exit. This is what the SwiftBar plugin runs.
+///
+/// A streaming plugin would update the menu bar more smoothly, but SwiftBar
+/// resets the menu item on every `~~~` block, which dismisses the dropdown
+/// while you are reading it. A refresh plugin is deferred while the menu is
+/// open, so it stays put.
 fn cmd_once() {
     nwpath::start();
     nwpath::wait_ready(Duration::from_secs(3));
     let store = store::Store::open().expect("open database");
     let mut sampler = sampler::Sampler::new(store);
-    sampler.tick();
-    std::thread::sleep(Duration::from_secs(1));
+    // One read: the delta is measured against the checkpoint the previous run
+    // left behind, so there is nothing to wait around for.
     sampler.tick();
     println!("{}", render::title(sampler.rate()));
     println!("---");

@@ -6,10 +6,10 @@ Live network data usage in the macOS menu bar, split by **mobile** vs **Wi-Fi**,
 resetting daily and keeping history for graphs.
 
 A single 1.4 MB Rust binary that runs as a [SwiftBar](https://swiftbar.app)
-streamable plugin. No app bundle, no code signing, no webview.
+plugin. No app bundle, no code signing, no webview.
 
 ```
-↓ 1.2 MB/s  ↑ 340 KB/s          ← menu bar, updates every second
+↓1.2M ↑340K                     ← menu bar, refreshed every 2s
 ────────────────────────────
 Today · Tuesday 22 September
  Mobile      2.41 GB   ↓2.10 GB ↑312 MB
@@ -145,12 +145,24 @@ to 56 and reads garbage, so fields are read at explicit byte offsets.
 ## Commands
 
 ```bash
-data-usage stream                        # SwiftBar streaming mode (default)
-data-usage once                          # print one menu and exit
+data-usage once                          # print one menu and exit (what the plugin runs)
+data-usage stream                        # continuous mode; see the note below
 data-usage status                        # link classification + who is accounting
 data-usage set-class en0 mobile          # pin an interface
 data-usage set-class en0 auto            # clear the pin
 ```
+
+## Why a refresh plugin, not a streaming one
+
+SwiftBar supports streamable plugins, which push updates continuously and would
+give a smoother menu bar. It resets the menu item on every `~~~` block, though,
+which dismisses the dropdown a second after you open it. A refresh plugin is
+deferred while the menu is open, so it stays put. `stream` is still there, and
+still has that flaw.
+
+One refresh costs about 10 ms, and each run measures its delta against the
+checkpoint the previous run left in the database, so accounting is continuous
+even though nothing is.
 
 ## Development
 

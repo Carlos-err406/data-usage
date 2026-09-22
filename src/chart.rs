@@ -20,19 +20,18 @@ pub struct Palette {
     pub baseline: [u8; 4],
 }
 
-/// Apple system colours, which sit naturally in a macOS menu.
-pub const LIGHT: Palette = Palette {
+/// One palette for both themes, deliberately.
+///
+/// SwiftBar's `image=light,dark` selection is inverted — it hands back the
+/// *light* image when the theme is dark (MenuLineParameters.getImage) — so a
+/// two-variant image shows the wrong one. These are Apple system colours,
+/// saturated enough to read on either background, with a mid-grey baseline
+/// that disappears politely into both.
+pub const PALETTE: Palette = Palette {
     mobile: [255, 149, 0],
-    wifi: [0, 122, 255],
-    wired: [52, 199, 89],
-    baseline: [0, 0, 0, 38],
-};
-
-pub const DARK: Palette = Palette {
-    mobile: [255, 159, 10],
     wifi: [10, 132, 255],
-    wired: [48, 209, 88],
-    baseline: [255, 255, 255, 46],
+    wired: [52, 199, 89],
+    baseline: [128, 128, 128, 90],
 };
 
 impl Palette {
