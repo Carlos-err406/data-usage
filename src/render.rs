@@ -55,12 +55,12 @@ fn midnight_of(day: NaiveDate) -> i64 {
         .unwrap_or(0)
 }
 
-/// SF Symbol standing in for each class, coloured to match the chart.
-fn class_symbol(c: Class) -> &'static str {
+/// Row colour, matching the bars in the charts below.
+fn class_color(c: Class) -> &'static str {
     match c {
-        Class::Mobile => "sfimage=antenna.radiowaves.left.and.right sfcolor=#FF9500",
-        Class::Wifi => "sfimage=wifi sfcolor=#007AFF",
-        Class::Wired => "sfimage=cable.connector sfcolor=#34C759",
+        Class::Mobile => "#FF9500",
+        Class::Wifi => "#0A84FF",
+        Class::Wired => "#34C759",
     }
 }
 
@@ -86,26 +86,42 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
         .unwrap_or_default();
     let _ = writeln!(s, "{} | size=13", Local::now().format("Today · %A %-d %B"));
 
+    // Header row. Without it the first number is unlabelled, and there is
+    // nothing to say which of the three columns is which.
+    let _ = writeln!(
+        s,
+        "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=11 color=#8E8E93",
+        "", "total", "↓ down", "↑ up"
+    );
+
+    // No sfimage on these rows: SwiftBar indents the text past the icon, which
+    // knocks the icon-less Total row out of alignment with the ones above it.
+    let mut day_rx = 0u64;
+    let mut day_tx = 0u64;
     for class in Class::ALL {
         let (rx, tx) = today.get(&class).copied().unwrap_or((0, 0));
+        day_rx += rx;
+        day_tx += tx;
         if rx == 0 && tx == 0 && class == Class::Wired {
             continue; // don't clutter the menu with a link that isn't in use
         }
         let _ = writeln!(
             s,
-            "{:<9}{:>10}   ↓{:>9} ↑{:>9} | {} font=Menlo-Regular size=12",
+            "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color={}",
             class.label(),
             units::bytes(rx + tx),
             units::bytes(rx),
             units::bytes(tx),
-            class_symbol(class)
+            class_color(class)
         );
     }
     let _ = writeln!(
         s,
-        "{:<9}{:>10} | font=Menlo-Regular size=12",
+        "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12",
         "Total",
-        units::bytes(total_of(&today))
+        units::bytes(day_rx + day_tx),
+        units::bytes(day_rx),
+        units::bytes(day_tx)
     );
 
     // --- today, by hour ---
