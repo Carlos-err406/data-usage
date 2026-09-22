@@ -1,0 +1,111 @@
+name: release
+
+# Tags only. Pushing to main never publishes; a release happens when, and only
+# when, a v-prefixed semver tag is pushed:
+#
+#   cargo set-version / edit Cargo.toml, commit, then
+#   git tag v0.1.0 && git push origin v0.1.0
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+*']
+
+# Needed to create the release and upload assets.
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  # Oldest macOS the universal binary is expected to run on.
+  MACOSX_DEPLOYMENT_TARGET: '11.0'
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Derive version from tag
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify tag matches Cargo.toml
+        # Catches the easy mistake of tagging without bumping the manifest,
+        # which would ship a binary that misreports its own version.
+        run: |
+          manifest=$(cargo metadata --no-deps --format-version 1 \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["packages"][0]["version"])')
+          tag='${{ steps.version.outputs.version }}'
+          if [ "$manifest" != "$tag" ]; then
+            echo "::error::tag v$tag does not match Cargo.toml version $manifest"
+            exit 1
+          fi
+          echo "version $manifest matches tag"
+
+      - name: Add targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      - name: Build both architectures
+        run: |
+          cargo build --release --locked --target aarch64-apple-darwin
+          cargo build --release --locked --target x86_64-apple-darwin
+
+      - name: Make universal binary
+        run: |
+          mkdir -p dist
+          lipo -create -output dist/data-usage \
+            target/aarch64-apple-darwin/release/data-usage \
+            target/x86_64-apple-darwin/release/data-usage
+          lipo -info dist/data-usage
+          # Ad-hoc signature. Not notarised, so a downloaded copy still carries
+          # a quarantine flag — the install script strips it.
+          codesign --force --sign - dist/data-usage
+          codesign --verify --verbose dist/data-usage
+
+      - name: Package
+        id: package
+        run: |
+          name="data-usage-${GITHUB_REF_NAME}-macos-universal"
+          mkdir -p "$name"
+          cp dist/data-usage "$name/"
+          cp plugin/datausage.1s.sh "$name/"
+          cp packaging/install.sh "$name/"
+          cp README.md "$name/"
+          tar -czf "$name.tar.gz" "$name"
+          shasum -a 256 "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "archive=$name.tar.gz" >> "$GITHUB_OUTPUT"
+
+      - name: Compose release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Fetch GitHub's generated changelog explicitly rather than passing
+          # --generate-notes alongside --notes-file, where precedence between
+          # the two is not well defined.
+          generated=$(gh api -X POST "repos/$GITHUB_REPOSITORY/releases/generate-notes" \
+            -f tag_name="$GITHUB_REF_NAME" --jq .body)
+          cat > notes.md <<'HEADER'
+          ### Install
+
+          ```bash
+          tar -xzf data-usage-*-macos-universal.tar.gz
+          cd data-usage-*-macos-universal
+          ./install.sh
+          ```
+
+          Requires [SwiftBar](https://swiftbar.app) (`brew install --cask swiftbar`).
+
+          The binary is ad-hoc signed but not notarised, so macOS quarantines it
+          on download; `install.sh` removes the quarantine flag.
+
+          HEADER
+          printf '%s\n' "$generated" >> notes.md
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            "${{ steps.package.outputs.archive }}" \
+            "${{ steps.package.outputs.archive }}.sha256"

@@ -1,0 +1,22 @@
+[package]
+name = "data-usage"
+version = "0.1.0"
+edition = "2024"
+description = "Live macOS network data usage in the menu bar, split by mobile vs Wi-Fi"
+license = "MIT"
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+png = "0.18"
+libc = "0.2"
+block2 = "0.6"
+objc2 = "0.6"
+dispatch2 = "0.3"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
