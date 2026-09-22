@@ -55,12 +55,26 @@ fn midnight_of(day: NaiveDate) -> i64 {
         .unwrap_or(0)
 }
 
-/// Row colour, matching the bars in the charts below.
-fn class_color(c: Class) -> &'static str {
+/// Wrap text in an ANSI 256-colour escape.
+///
+/// Not the `color=` parameter, deliberately. SwiftBar attaches a click action
+/// to any line carrying a colour — `configureAction` fires on
+/// `params.hasAction || params.color != nil` — which gives these read-only
+/// rows a highlight on hover and makes them look interactive. Colouring
+/// through `ansi=true` leaves `params.color` nil, so the row stays inert.
+fn ansi(code: u8, text: &str) -> String {
+    format!("\u{1b}[38;5;{code}m{text}\u{1b}[0m")
+}
+
+/// Muted grey for labels and placeholders.
+const DIM: u8 = 245;
+
+/// Row colour matching the chart bars.
+fn class_code(c: Class) -> u8 {
     match c {
-        Class::Mobile => "#FF9500",
-        Class::Wifi => "#0A84FF",
-        Class::Wired => "#34C759",
+        Class::Mobile => 208, // ≈ #FF9500
+        Class::Wifi => 33,    // ≈ #0A84FF
+        Class::Wired => 41,   // ≈ #34C759
     }
 }
 
@@ -95,10 +109,11 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     // covers Unicode Zs, so padding with a non-breaking space does not escape
     // it either — the parameter is the only way out. Same font size as the
     // rows, or the columns land on a different monospace grid.
+    let header = format!("{:<7}{:>9}{:>9}{:>9}", "", "total", "↓ down", "↑ up");
     let _ = writeln!(
         s,
-        "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color=#8E8E93 trim=false",
-        "", "total", "↓ down", "↑ up"
+        "{} | font=Menlo-Regular size=12 ansi=true trim=false",
+        ansi(DIM, &header)
     );
 
     // No sfimage on these rows: SwiftBar indents the text past the icon, which
@@ -112,14 +127,17 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
         if rx == 0 && tx == 0 && class == Class::Wired {
             continue; // don't clutter the menu with a link that isn't in use
         }
-        let _ = writeln!(
-            s,
-            "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color={}",
+        let row = format!(
+            "{:<7}{:>9}{:>9}{:>9}",
             class.label(),
             units::bytes(rx + tx),
             units::bytes(rx),
-            units::bytes(tx),
-            class_color(class)
+            units::bytes(tx)
+        );
+        let _ = writeln!(
+            s,
+            "{} | font=Menlo-Regular size=12 ansi=true",
+            ansi(class_code(class), &row)
         );
     }
     let _ = writeln!(
@@ -183,7 +201,11 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
             // Offering a pin here would key it on an identifier that is about
             // to change, silently orphaning it.
             None => {
-                let _ = writeln!(s, "Identifying network… | size=12 color=#8E8E93");
+                let _ = writeln!(
+                    s,
+                    "{} | size=12 ansi=true",
+                    ansi(DIM, "Identifying network…")
+                );
             }
         }
     } else {
@@ -207,7 +229,11 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
 
 fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
     if series.iter().all(|(_, t)| total_of(t) == 0) {
-        let _ = writeln!(s, "  no traffic recorded yet | size=11 color=#8E8E93");
+        let _ = writeln!(
+            s,
+            "{} | size=11 ansi=true",
+            ansi(DIM, "  no traffic recorded yet")
+        );
         return;
     }
     // `width`/`height` are undocumented in SwiftBar's README but honoured in
