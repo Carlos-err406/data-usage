@@ -88,10 +88,18 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
 
     // Header row. Without it the first number is unlabelled, and there is
     // nothing to say which of the three columns is which.
+    //
+    // Padded with non-breaking spaces and set at the same size as the rows:
+    // leading ordinary spaces are stripped before the line is drawn, which
+    // slides the whole header a column to the left, and a smaller font would
+    // put the columns on a different monospace grid even if they survived.
     let _ = writeln!(
         s,
-        "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=11 color=#8E8E93",
-        "", "total", "↓ down", "↑ up"
+        "{}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color=#8E8E93",
+        "\u{00A0}".repeat(7),
+        "total",
+        "↓ down",
+        "↑ up"
     );
 
     // No sfimage on these rows: SwiftBar indents the text past the icon, which
