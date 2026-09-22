@@ -89,17 +89,16 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     // Header row. Without it the first number is unlabelled, and there is
     // nothing to say which of the three columns is which.
     //
-    // Padded with non-breaking spaces and set at the same size as the rows:
-    // leading ordinary spaces are stripped before the line is drawn, which
-    // slides the whole header a column to the left, and a smaller font would
-    // put the columns on a different monospace grid even if they survived.
+    // `trim=false` is load-bearing: SwiftBar trims each title with
+    // `.whitespaces` by default (MenuBarItem.swift), which eats the empty
+    // label column and slides the whole header one column left. That set
+    // covers Unicode Zs, so padding with a non-breaking space does not escape
+    // it either — the parameter is the only way out. Same font size as the
+    // rows, or the columns land on a different monospace grid.
     let _ = writeln!(
         s,
-        "{}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color=#8E8E93",
-        "\u{00A0}".repeat(7),
-        "total",
-        "↓ down",
-        "↑ up"
+        "{:<7}{:>9}{:>9}{:>9} | font=Menlo-Regular size=12 color=#8E8E93 trim=false",
+        "", "total", "↓ down", "↑ up"
     );
 
     // No sfimage on these rows: SwiftBar indents the text past the icon, which
