@@ -5,11 +5,13 @@
 
 use crate::chart;
 use crate::classify::Class;
+use crate::report;
 use crate::sampler::{Rate, Sampler};
 use crate::store::Totals;
 use crate::units;
 use chrono::{Duration as ChronoDuration, Local, NaiveDate, TimeZone};
 use std::fmt::Write as _;
+use std::path::Path;
 
 /// Menlo rather than the system font: proportional digits make the rate jitter
 /// as the number changes, which is very visible in a menu bar that updates
@@ -53,6 +55,23 @@ fn midnight_of(day: NaiveDate) -> i64 {
         .earliest()
         .map(|d| d.timestamp())
         .unwrap_or(0)
+}
+
+/// Percent-encode a path into a `file://` URL.
+///
+/// Needed twice over: the database lives under "Application Support", and
+/// SwiftBar reads an unquoted parameter value only up to the next space.
+fn file_url(path: &Path) -> String {
+    let mut out = String::from("file://");
+    for b in path.to_string_lossy().as_bytes() {
+        match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'/' | b'-' | b'_' | b'.' | b'~' => {
+                out.push(*b as char)
+            }
+            _ => out.push_str(&format!("%{b:02X}")),
+        }
+    }
+    out
 }
 
 /// Wrap text in an ANSI 256-colour escape.
@@ -152,15 +171,34 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     // --- today, by hour ---
     s.push_str("---\n");
     let _ = writeln!(s, "Last 24 hours | size=12");
-    let day_series = store.series(now - 24 * 3600, now, 3600).unwrap_or_default();
+    // Aligned to the hour, matching the interactive chart — otherwise the two
+    // views of "last 24 hours" would be drawing different buckets.
+    let hour = now - now.rem_euclid(3600);
+    let day_series = store
+        .series(hour - 23 * 3600, hour + 3600, 3600)
+        .unwrap_or_default();
     push_chart(&mut s, &day_series, 250, 44);
 
     // --- last 30 days ---
     s.push_str("---\n");
     let _ = writeln!(s, "Last 30 days | size=12");
     let month_start = local_midnight(29);
-    let month_series = store.series(month_start, now, 86400).unwrap_or_default();
+    let month_series = store
+        .series(month_start, local_midnight(0) + 86400, 86400)
+        .unwrap_or_default();
     push_chart(&mut s, &month_series, 250, 44);
+
+    // A menu item cannot report which bar the pointer is over, so per-bar
+    // hover needs a real web view. SwiftBar opens one under the menu bar item
+    // for any line with `href=... webview=true`.
+    let page = crate::store::data_dir().join("report.html");
+    if report::write_if_changed(store, &page).is_ok() {
+        let _ = writeln!(
+            s,
+            "Interactive chart… | href={} webview=true webvieww=560 webviewh=430 size=12",
+            file_url(&page)
+        );
+    }
 
     let month_total: u64 = month_series.iter().map(|(_, t)| total_of(t)).sum();
     let yesterday = store

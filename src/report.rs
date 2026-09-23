@@ -1,0 +1,112 @@
+//! The interactive chart, as a self-contained HTML page.
+//!
+//! A PNG in a menu item cannot report which bar the pointer is over — AppKit
+//! hands the plugin no per-pixel hover — so real per-bar tooltips need a real
+//! web view. SwiftBar opens one anchored under the menu bar item for any line
+//! carrying `href=<url> webview=true`.
+//!
+//! The page is written to disk and loaded over `file://`. Everything is inlined:
+//! the popover has no network and WKWebView is given no read access beyond the
+//! page itself, so an external stylesheet or script would silently not load.
+
+use crate::classify::Class;
+use crate::store::{Store, Totals};
+use chrono::{Duration as ChronoDuration, Local, TimeZone};
+use std::io;
+use std::path::Path;
+
+const TEMPLATE: &str = include_str!("report.html");
+
+/// Local midnight, `days_ago` days back.
+fn midnight(days_ago: i64) -> i64 {
+    let day = Local::now().date_naive() - ChronoDuration::days(days_ago);
+    Local
+        .from_local_datetime(&day.and_hms_opt(0, 0, 0).unwrap())
+        .earliest()
+        .map(|d| d.timestamp())
+        .unwrap_or(0)
+}
+
+/// Start of the current local hour.
+fn hour_start(ts: i64) -> i64 {
+    let dt = Local.timestamp_opt(ts, 0).earliest();
+    match dt {
+        Some(d) => d.timestamp() - (d.timestamp().rem_euclid(3600)),
+        None => ts - ts.rem_euclid(3600),
+    }
+}
+
+fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
+
+/// One series as a JSON array of `{label, title, mobile:[rx,tx], ...}`.
+fn series_json(series: &[(i64, Totals)], fmt: &str) -> String {
+    let mut items = Vec::with_capacity(series.len());
+    for (start, totals) in series {
+        let label = Local
+            .timestamp_opt(*start, 0)
+            .earliest()
+            .map(|d| d.format(fmt).to_string())
+            .unwrap_or_default();
+        let title = Local
+            .timestamp_opt(*start, 0)
+            .earliest()
+            .map(|d| d.format("%a %-d %b, %H:%M").to_string())
+            .unwrap_or_default();
+        let mut parts = Vec::new();
+        for class in Class::ALL {
+            let (rx, tx) = totals.get(&class).copied().unwrap_or((0, 0));
+            parts.push(format!("\"{}\":[{},{}]", class.key(), rx, tx));
+        }
+        items.push(format!(
+            "{{\"label\":\"{}\",\"title\":\"{}\",{}}}",
+            json_escape(&label),
+            json_escape(&title),
+            parts.join(",")
+        ));
+    }
+    format!("[{}]", items.join(","))
+}
+
+/// Build the page for the current contents of the database.
+pub fn html(store: &Store) -> String {
+    let now = crate::sampler::Sampler::now();
+
+    // Aligned to real hour and midnight boundaries, so a bar's label means what
+    // it says. A rolling window would put "14:00" on a bar covering 14:37–15:37.
+    let hours_from = hour_start(now) - 23 * 3600;
+    let hours = store
+        .series(hours_from, hour_start(now) + 3600, 3600)
+        .unwrap_or_default();
+    let days_from = midnight(29);
+    let days = store
+        .series(days_from, midnight(0) + 86400, 86400)
+        .unwrap_or_default();
+
+    TEMPLATE
+        .replace("\"__HOURS__\"", &series_json(&hours, "%H"))
+        .replace("\"__DAYS__\"", &series_json(&days, "%-d"))
+}
+
+/// Write the page, but only when it differs — the menu re-renders every couple
+/// of seconds and there is no reason to touch the disk each time.
+pub fn write_if_changed(store: &Store, path: &Path) -> io::Result<()> {
+    let next = html(store);
+    if let Ok(current) = std::fs::read_to_string(path)
+        && current == next
+    {
+        return Ok(());
+    }
+    std::fs::write(path, next)
+}

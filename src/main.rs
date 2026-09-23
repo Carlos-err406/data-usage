@@ -10,6 +10,7 @@ mod lock;
 mod netid;
 mod nwpath;
 mod render;
+mod report;
 mod sampler;
 mod store;
 mod units;

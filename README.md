@@ -99,6 +99,23 @@ That deliberately excludes `utun*` (VPN), `awdl0`/`llw0` (AirDrop), `bridge*`,
 counted on the physical interface carrying it, so counting both would double
 every byte sent over a VPN.
 
+## Interactive chart
+
+**Interactive chart…** in the dropdown opens a web view popover anchored under
+the menu bar item, with hover tooltips giving the exact split for any hour or
+day.
+
+It is a separate view rather than hover on the charts already in the menu
+because an `NSMenuItem` image cannot report which bar the pointer is over —
+AppKit hands the plugin no per-pixel hover — so real per-bar tooltips need a
+real web view. SwiftBar opens one for any line carrying `href=<url>
+webview=true`.
+
+The page is written to `report.html` beside the database and loaded over
+`file://`. Everything in it is inlined: the popover has no network access and
+WKWebView is given no read access beyond the page itself, so an external
+stylesheet or script would silently fail to load.
+
 ## Where the data lives
 
 `~/Library/Application Support/data-usage/usage.db` — SQLite, WAL mode.
