@@ -99,17 +99,22 @@ That deliberately excludes `utun*` (VPN), `awdl0`/`llw0` (AirDrop), `bridge*`,
 counted on the physical interface carrying it, so counting both would double
 every byte sent over a VPN.
 
-## Interactive chart
+## The popover
 
-**Interactive chart…** in the dropdown opens a web view popover anchored under
-the menu bar item, with hover tooltips giving the exact split for any hour or
-day.
+**Left-clicking the menu bar item opens a popover** with today's totals and both
+charts, where hovering any bar gives the exact split for that hour or day.
+**Right-clicking opens the menu**, which is where the actions live — pinning a
+network, revealing the database.
 
-It is a separate view rather than hover on the charts already in the menu
-because an `NSMenuItem` image cannot report which bar the pointer is over —
-AppKit hands the plugin no per-pixel hover — so real per-bar tooltips need a
-real web view. SwiftBar opens one for any line carrying `href=<url>
-webview=true`.
+That split comes from `barItemClicked`: on a left click SwiftBar runs the title
+line's action first and only falls through to opening the menu if nothing fired.
+So an `href=<url> webview=true` on the menu bar line reaches the popover in one
+click, and the menu stays on right-click.
+
+Hover has to live in a web view because an `NSMenuItem` image cannot report
+which bar the pointer is over — AppKit hands the plugin no per-pixel hover, and
+a menu row is the smallest unit it knows about. Giving the chart image an action
+just highlights the whole row.
 
 The page is written to `report.html` beside the database and loaded over
 `file://`. Everything in it is inlined: the popover has no network access and

@@ -76,12 +76,13 @@ fn cmd_stream() {
         sampler.tick();
 
         if n.is_multiple_of(DROPDOWN_EVERY) {
-            dropdown = render::dropdown(&mut sampler, &exe);
+            let href = render::ensure_report(&mut sampler);
+            dropdown = render::dropdown(&mut sampler, &exe, href.as_deref());
         }
         n = n.wrapping_add(1);
 
         let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{}", render::title(sampler.rate()));
+        let _ = writeln!(out, "{}", render::title(sampler.rate(), None));
         let _ = writeln!(out, "---");
         let _ = out.write_all(dropdown.as_bytes());
         // Tells SwiftBar this menu is complete and the next one follows.
@@ -104,9 +105,14 @@ fn cmd_once() {
     // One read: the delta is measured against the checkpoint the previous run
     // left behind, so there is nothing to wait around for.
     sampler.tick();
-    println!("{}", render::title(sampler.rate()));
+    // The page has to exist before the title line can point at it.
+    let href = render::ensure_report(&mut sampler);
+    println!("{}", render::title(sampler.rate(), href.as_deref()));
     println!("---");
-    print!("{}", render::dropdown(&mut sampler, &exe_path()));
+    print!(
+        "{}",
+        render::dropdown(&mut sampler, &exe_path(), href.as_deref())
+    );
 }
 
 /// Report what this instance sees, including whether it is the one accounting.

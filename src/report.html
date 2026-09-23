@@ -67,7 +67,26 @@
     font-size: 11px; color: var(--dim); align-items: center;
   }
   .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+  /* Left-clicking the icon opens this popover, so the menu — and the actions
+     in it — are only reachable on right-click. Say so, or they are lost. */
+  .legend .hint { margin-left: auto; opacity: .75; }
   .empty { color: var(--dim); font-size: 11px; padding: 34px 0; text-align: center; }
+  header { margin-bottom: 18px; }
+  .date { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+  .totals {
+    border-spacing: 0; font-variant-numeric: tabular-nums;
+    font-size: 12px; width: 100%; max-width: 380px;
+  }
+  .totals th {
+    font-weight: 400; color: var(--dim); text-align: right;
+    font-size: 11px; padding: 0 0 3px 14px;
+  }
+  .totals th:first-child { text-align: left; padding-left: 0; }
+  .totals td { text-align: right; padding: 2px 0 2px 14px; }
+  .totals td:first-child { text-align: left; padding-left: 0; }
+  .totals tr.tot td { border-top: 1px solid var(--rule); color: var(--dim); padding-top: 4px; }
+  .totals i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
+  .link { margin-top: 10px; font-size: 11px; color: var(--dim); }
   #tip {
     /* absolute rather than fixed: the page never scrolls, so the two behave
        identically, and position() adds the scroll offset regardless. */
@@ -88,6 +107,12 @@
   #tip .dot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 5px; }
 </style>
 
+<header>
+  <div class="date" id="date"></div>
+  <table class="totals" id="totals"></table>
+  <div class="link" id="link"></div>
+</header>
+
 <section>
   <h2>Last 24 hours</h2>
   <p class="sub" id="sub-h"></p>
@@ -106,11 +131,14 @@
   <span><i style="background:var(--mobile)"></i>Mobile</span>
   <span><i style="background:var(--wifi)"></i>Wi-Fi</span>
   <span><i style="background:var(--wired)"></i>Ethernet</span>
+  <span class="hint">Right-click the menu bar icon for settings</span>
 </div>
 
 <div id="tip"></div>
 
 <script>
+const TODAY = "__TODAY__";
+const LINK  = "__LINK__";
 const HOURS = "__HOURS__";
 const DAYS  = "__DAYS__";
 const CLASSES = [["mobile","Mobile"],["wifi","Wi-Fi"],["wired","Ethernet"]];
@@ -190,6 +218,22 @@ function draw(data, chartId, axisId, subId, everyNth) {
   });
 }
 
+function header() {
+  document.getElementById("date").textContent = "Today · " + TODAY.date;
+  const body = TODAY.rows
+    .filter(r => r.rx + r.tx > 0 || r.key !== "wired")
+    .map(r =>
+      `<tr><td><i style="background:var(--${r.key})"></i>${r.name}</td>` +
+      `<td>${fmt(r.rx + r.tx)}</td><td>${fmt(r.rx)}</td><td>${fmt(r.tx)}</td></tr>`)
+    .join("");
+  document.getElementById("totals").innerHTML =
+    `<tr><th>&nbsp;</th><th>total</th><th>↓ down</th><th>↑ up</th></tr>` + body +
+    `<tr class="tot"><td>Total</td><td>${fmt(TODAY.total[0]+TODAY.total[1])}</td>` +
+    `<td>${fmt(TODAY.total[0])}</td><td>${fmt(TODAY.total[1])}</td></tr>`;
+  document.getElementById("link").textContent = LINK ? "Now on " + LINK : "Offline";
+}
+
+header();
 draw(HOURS, "hours", "axis-h", "sub-h", 3);
 draw(DAYS, "days", "axis-d", "sub-d", 5);
 </script>

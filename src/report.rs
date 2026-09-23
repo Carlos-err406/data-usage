@@ -79,8 +79,36 @@ fn series_json(series: &[(i64, Totals)], fmt: &str) -> String {
     format!("[{}]", items.join(","))
 }
 
+/// Today's totals, for the header.
+fn today_json(store: &Store) -> String {
+    let now = crate::sampler::Sampler::now();
+    let start = midnight(0);
+    let totals = store.totals_between(start, now + 1).unwrap_or_default();
+    let mut rows = Vec::new();
+    let (mut trx, mut ttx) = (0u64, 0u64);
+    for class in Class::ALL {
+        let (rx, tx) = totals.get(&class).copied().unwrap_or((0, 0));
+        trx += rx;
+        ttx += tx;
+        rows.push(format!(
+            "{{\"key\":\"{}\",\"name\":\"{}\",\"rx\":{},\"tx\":{}}}",
+            class.key(),
+            class.label(),
+            rx,
+            tx
+        ));
+    }
+    format!(
+        "{{\"date\":\"{}\",\"rows\":[{}],\"total\":[{},{}]}}",
+        json_escape(&Local::now().format("%A %-d %B").to_string()),
+        rows.join(","),
+        trx,
+        ttx
+    )
+}
+
 /// Build the page for the current contents of the database.
-pub fn html(store: &Store) -> String {
+pub fn html(store: &Store, link: Option<&str>) -> String {
     let now = crate::sampler::Sampler::now();
 
     // Aligned to real hour and midnight boundaries, so a bar's label means what
@@ -94,15 +122,22 @@ pub fn html(store: &Store) -> String {
         .series(days_from, midnight(0) + 86400, 86400)
         .unwrap_or_default();
 
+    let link_json = match link {
+        Some(t) => format!("\"{}\"", json_escape(t)),
+        None => "null".to_string(),
+    };
+
     TEMPLATE
         .replace("\"__HOURS__\"", &series_json(&hours, "%H"))
         .replace("\"__DAYS__\"", &series_json(&days, "%-d"))
+        .replace("\"__TODAY__\"", &today_json(store))
+        .replace("\"__LINK__\"", &link_json)
 }
 
 /// Write the page, but only when it differs — the menu re-renders every couple
 /// of seconds and there is no reason to touch the disk each time.
-pub fn write_if_changed(store: &Store, path: &Path) -> io::Result<()> {
-    let next = html(store);
+pub fn write_if_changed(store: &Store, path: &Path, link: Option<&str>) -> io::Result<()> {
+    let next = html(store, link);
     if let Ok(current) = std::fs::read_to_string(path)
         && current == next
     {

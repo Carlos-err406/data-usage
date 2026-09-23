@@ -88,6 +88,9 @@ fn ansi(code: u8, text: &str) -> String {
 /// Muted grey for labels and placeholders.
 const DIM: u8 = 245;
 
+/// Parameters that open the interactive page in a web view popover.
+const POPOVER: &str = "webview=true webvieww=560 webviewh=580";
+
 /// Row colour matching the chart bars.
 fn class_code(c: Class) -> u8 {
     match c {
@@ -97,17 +100,37 @@ fn class_code(c: Class) -> u8 {
     }
 }
 
+/// Regenerate the interactive page and return its URL.
+pub fn ensure_report(sampler: &mut Sampler) -> Option<String> {
+    let link = sampler
+        .current_link()
+        .map(|l| format!("{} · {}", l.iface, l.detail));
+    let page = crate::store::data_dir().join("report.html");
+    report::write_if_changed(&sampler.store, &page, link.as_deref())
+        .ok()
+        .map(|_| file_url(&page))
+}
+
 /// The menu bar title — live throughput only.
-pub fn title(rate: Rate) -> String {
-    format!(
+///
+/// Carrying the href here is what makes a left click open the popover instead
+/// of the menu: `barItemClicked` runs the title line's action first and only
+/// falls through to `showMenu()` if nothing fired. Right click still opens the
+/// menu, which is where the actions live.
+pub fn title(rate: Rate, href: Option<&str>) -> String {
+    let mut out = format!(
         "↓{} ↑{} | {BAR_FONT}",
         units::rate(rate.rx),
         units::rate(rate.tx)
-    )
+    );
+    if let Some(url) = href {
+        out.push_str(&format!(" href={url} {POPOVER}"));
+    }
+    out
 }
 
 /// The whole dropdown.
-pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
+pub fn dropdown(sampler: &mut Sampler, exe: &str, href: Option<&str>) -> String {
     let now = Sampler::now();
     let link = sampler.current_link();
     let store = &sampler.store;
@@ -168,13 +191,6 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
         units::bytes(day_tx)
     );
 
-    // Written before the charts: both of them link to it.
-    let page = crate::store::data_dir().join("report.html");
-    let page_url = report::write_if_changed(store, &page)
-        .ok()
-        .map(|_| file_url(&page));
-    let href = page_url.as_deref();
-
     // --- today, by hour ---
     s.push_str("---\n");
     let _ = writeln!(s, "Last 24 hours | size=12");
@@ -195,7 +211,6 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
         .unwrap_or_default();
     push_chart(&mut s, &month_series, 250, 44);
 
-    // Spelled out, because a chart you can click is not self-evident.
     if let Some(url) = href {
         let _ = writeln!(
             s,
@@ -267,9 +282,6 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     );
     s
 }
-
-/// Parameters that open the interactive chart in a web view popover.
-const POPOVER: &str = "webview=true webvieww=560 webviewh=430";
 
 fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
     if series.iter().all(|(_, t)| total_of(t) == 0) {
