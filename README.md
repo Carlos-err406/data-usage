@@ -102,9 +102,13 @@ every byte sent over a VPN.
 ## The popover
 
 **Left-clicking the menu bar item opens a popover** with today's totals and both
-charts, where hovering any bar gives the exact split for that hour or day.
-**Right-clicking opens the menu**, which is where the actions live — pinning a
-network, revealing the database.
+charts, where hovering any bar gives the exact split for that hour or day. That
+is the whole interface.
+
+**Right-clicking opens a short context menu** with the only things the popover
+cannot do: pinning the current network's classification, and revealing the
+database. A web page in SwiftBar's popover has no channel back to the plugin,
+so actions have to be menu items.
 
 That split comes from `barItemClicked`: on a left click SwiftBar runs the title
 line's action first and only falls through to opening the menu if nothing fired.

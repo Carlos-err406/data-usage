@@ -3,7 +3,6 @@
 //! Runs as a SwiftBar streamable plugin: it prints a menu, then a `~~~`
 //! separator, then the next menu, forever.
 
-mod chart;
 mod classify;
 mod ifstat;
 mod lock;
@@ -70,19 +69,20 @@ fn cmd_stream() {
     sampler.tick();
 
     let mut dropdown = String::new();
+    let mut page: Option<String> = None;
     let mut n = 0u32;
     loop {
         std::thread::sleep(TICK);
         sampler.tick();
 
         if n.is_multiple_of(DROPDOWN_EVERY) {
-            let href = render::ensure_report(&mut sampler);
-            dropdown = render::dropdown(&mut sampler, &exe, href.as_deref());
+            page = render::ensure_report(&mut sampler);
+            dropdown = render::dropdown(&mut sampler, &exe);
         }
         n = n.wrapping_add(1);
 
         let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{}", render::title(sampler.rate(), None));
+        let _ = writeln!(out, "{}", render::title(sampler.rate(), page.as_deref()));
         let _ = writeln!(out, "---");
         let _ = out.write_all(dropdown.as_bytes());
         // Tells SwiftBar this menu is complete and the next one follows.
@@ -109,10 +109,7 @@ fn cmd_once() {
     let href = render::ensure_report(&mut sampler);
     println!("{}", render::title(sampler.rate(), href.as_deref()));
     println!("---");
-    print!(
-        "{}",
-        render::dropdown(&mut sampler, &exe_path(), href.as_deref())
-    );
+    print!("{}", render::dropdown(&mut sampler, &exe_path()));
 }
 
 /// Report what this instance sees, including whether it is the one accounting.

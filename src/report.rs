@@ -122,6 +122,17 @@ pub fn html(store: &Store, link: Option<&str>) -> String {
         .series(days_from, midnight(0) + 86400, 86400)
         .unwrap_or_default();
 
+    // Saying when tracking began is the honest caption for a 30-day chart with
+    // two days in it — otherwise 28 empty columns read as 28 idle days.
+    let days_label = match store.first_bucket() {
+        Ok(Some(first)) if first > days_from => Local
+            .timestamp_opt(first, 0)
+            .earliest()
+            .map(|d| format!("Since {}", d.format("%-d %b")))
+            .unwrap_or_else(|| "Last 30 days".into()),
+        _ => "Last 30 days".into(),
+    };
+
     let link_json = match link {
         Some(t) => format!("\"{}\"", json_escape(t)),
         None => "null".to_string(),
@@ -131,6 +142,7 @@ pub fn html(store: &Store, link: Option<&str>) -> String {
         .replace("\"__HOURS__\"", &series_json(&hours, "%H"))
         .replace("\"__DAYS__\"", &series_json(&days, "%-d"))
         .replace("\"__TODAY__\"", &today_json(store))
+        .replace("__DAYSLABEL__", &days_label)
         .replace("\"__LINK__\"", &link_json)
 }
 

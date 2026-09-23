@@ -1,33 +1,7 @@
-//! Human-readable byte and rate formatting.
-
-/// Formats with enough precision to stay readable but a stable-ish width, so
-/// the menu bar doesn't jitter as digits come and go.
-pub fn bytes(n: u64) -> String {
-    const UNITS: [(&str, f64); 5] = [
-        ("TB", 1e12),
-        ("GB", 1e9),
-        ("MB", 1e6),
-        ("KB", 1e3),
-        ("B", 1.0),
-    ];
-    let v = n as f64;
-    for (unit, scale) in UNITS {
-        if v >= scale {
-            let x = v / scale;
-            let digits = if unit == "B" {
-                0
-            } else if x < 10.0 {
-                2
-            } else if x < 100.0 {
-                1
-            } else {
-                0
-            };
-            return format!("{x:.digits$} {unit}");
-        }
-    }
-    "0 B".into()
-}
+//! Rate formatting for the menu bar.
+//!
+//! Byte formatting lives in the popover's JavaScript: that is the only thing
+//! rendering totals now, and a second copy in Rust would only drift.
 
 /// Rate for the menu bar, as short as it can be and still be read.
 ///
@@ -55,23 +29,6 @@ pub fn rate(bytes_per_sec: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn scales_to_the_largest_fitting_unit() {
-        assert_eq!(bytes(0), "0 B");
-        assert_eq!(bytes(999), "999 B");
-        assert_eq!(bytes(1_000), "1.00 KB");
-        assert_eq!(bytes(1_500_000), "1.50 MB");
-        assert_eq!(bytes(2_410_000_000), "2.41 GB");
-    }
-
-    #[test]
-    fn sheds_decimals_as_the_number_widens() {
-        // Keeps the rendered width roughly constant so the menu doesn't jitter.
-        assert_eq!(bytes(9_900_000), "9.90 MB");
-        assert_eq!(bytes(99_000_000), "99.0 MB");
-        assert_eq!(bytes(990_000_000), "990 MB");
-    }
 
     #[test]
     fn rate_is_compact() {
