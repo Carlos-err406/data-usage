@@ -168,6 +168,13 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
         units::bytes(day_tx)
     );
 
+    // Written before the charts: both of them link to it.
+    let page = crate::store::data_dir().join("report.html");
+    let page_url = report::write_if_changed(store, &page)
+        .ok()
+        .map(|_| file_url(&page));
+    let href = page_url.as_deref();
+
     // --- today, by hour ---
     s.push_str("---\n");
     let _ = writeln!(s, "Last 24 hours | size=12");
@@ -177,7 +184,7 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     let day_series = store
         .series(hour - 23 * 3600, hour + 3600, 3600)
         .unwrap_or_default();
-    push_chart(&mut s, &day_series, 250, 44);
+    push_chart(&mut s, &day_series, 250, 44, href);
 
     // --- last 30 days ---
     s.push_str("---\n");
@@ -186,17 +193,13 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     let month_series = store
         .series(month_start, local_midnight(0) + 86400, 86400)
         .unwrap_or_default();
-    push_chart(&mut s, &month_series, 250, 44);
+    push_chart(&mut s, &month_series, 250, 44, href);
 
-    // A menu item cannot report which bar the pointer is over, so per-bar
-    // hover needs a real web view. SwiftBar opens one under the menu bar item
-    // for any line with `href=... webview=true`.
-    let page = crate::store::data_dir().join("report.html");
-    if report::write_if_changed(store, &page).is_ok() {
+    // Spelled out, because a chart you can click is not self-evident.
+    if let Some(url) = href {
         let _ = writeln!(
             s,
-            "Interactive chart… | href={} webview=true webvieww=560 webviewh=430 size=12",
-            file_url(&page)
+            "Hover the bars in an interactive chart… | href={url} {POPOVER} size=12"
         );
     }
 
@@ -265,7 +268,10 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     s
 }
 
-fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
+/// Parameters that open the interactive chart in a web view popover.
+const POPOVER: &str = "webview=true webvieww=560 webviewh=430";
+
+fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32, href: Option<&str>) {
     if series.iter().all(|(_, t)| total_of(t) == 0) {
         let _ = writeln!(
             s,
@@ -278,7 +284,19 @@ fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
     // MenuLineParameters.resizedImageIfRequested. Both are required: omit
     // either and the image collapses to a few pixels.
     let png = b64(&chart::bars(series, w, h, &chart::PALETTE));
-    let _ = writeln!(s, " | image={png} width={w} height={h}");
+    // Clicking the chart opens the interactive one. The static image cannot
+    // report which bar the pointer is over, so this is the way in.
+    match href {
+        Some(url) => {
+            let _ = writeln!(
+                s,
+                " | image={png} width={w} height={h} href={url} {POPOVER}"
+            );
+        }
+        None => {
+            let _ = writeln!(s, " | image={png} width={w} height={h}");
+        }
+    }
 }
 
 /// A first-run placeholder so the menu never looks broken.
