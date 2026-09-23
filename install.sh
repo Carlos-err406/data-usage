@@ -37,15 +37,17 @@ PLUGIN_DIR="$(defaults read com.ameba.SwiftBar PluginDirectory 2>/dev/null || ec
 mkdir -p "$BIN_DIR" "$PLUGIN_DIR"
 install -m 755 "$SRC/target/release/data-usage" "$BIN_DIR/data-usage"
 
-# Drop any previously installed copy first. The refresh interval lives in the
-# filename, so an old one under a different interval would otherwise be left
-# behind and SwiftBar would run both.
-rm -f "$PLUGIN_DIR"/datausage.*.sh
-install -m 755 "$SRC"/plugin/datausage.*.sh "$PLUGIN_DIR/"
+# Drop any previously installed copy first. Both the name and the refresh
+# interval live in the filename — SwiftBar takes the popover's title from the
+# part before the first dot — so an older copy under a different name would be
+# left behind and SwiftBar would run both.
+find "$PLUGIN_DIR" -maxdepth 1 -name 'datausage.*.sh' -delete 2>/dev/null || true
+find "$PLUGIN_DIR" -maxdepth 1 -name 'Data Usage.*.sh' -delete 2>/dev/null || true
+install -m 755 "$SRC"/plugin/*.sh "$PLUGIN_DIR/"
 
 echo
 echo "Installed:"
 echo "  $BIN_DIR/data-usage"
-echo "  $PLUGIN_DIR/$(basename "$SRC"/plugin/datausage.*.sh)"
+echo "  $PLUGIN_DIR/$(basename "$SRC"/plugin/*.sh)"
 echo
 echo "Open SwiftBar (or Refresh All in its menu) to pick up the plugin."
