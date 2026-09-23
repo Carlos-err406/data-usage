@@ -184,7 +184,7 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     let day_series = store
         .series(hour - 23 * 3600, hour + 3600, 3600)
         .unwrap_or_default();
-    push_chart(&mut s, &day_series, 250, 44, href);
+    push_chart(&mut s, &day_series, 250, 44);
 
     // --- last 30 days ---
     s.push_str("---\n");
@@ -193,7 +193,7 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     let month_series = store
         .series(month_start, local_midnight(0) + 86400, 86400)
         .unwrap_or_default();
-    push_chart(&mut s, &month_series, 250, 44, href);
+    push_chart(&mut s, &month_series, 250, 44);
 
     // Spelled out, because a chart you can click is not self-evident.
     if let Some(url) = href {
@@ -271,7 +271,7 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
 /// Parameters that open the interactive chart in a web view popover.
 const POPOVER: &str = "webview=true webvieww=560 webviewh=430";
 
-fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32, href: Option<&str>) {
+fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32) {
     if series.iter().all(|(_, t)| total_of(t) == 0) {
         let _ = writeln!(
             s,
@@ -284,19 +284,10 @@ fn push_chart(s: &mut String, series: &[(i64, Totals)], w: u32, h: u32, href: Op
     // MenuLineParameters.resizedImageIfRequested. Both are required: omit
     // either and the image collapses to a few pixels.
     let png = b64(&chart::bars(series, w, h, &chart::PALETTE));
-    // Clicking the chart opens the interactive one. The static image cannot
-    // report which bar the pointer is over, so this is the way in.
-    match href {
-        Some(url) => {
-            let _ = writeln!(
-                s,
-                " | image={png} width={w} height={h} href={url} {POPOVER}"
-            );
-        }
-        None => {
-            let _ = writeln!(s, " | image={png} width={w} height={h}");
-        }
-    }
+    // No href here. Giving the image an action makes the whole row a live menu
+    // item, so the entire chart lights up on hover — which reads as a giant
+    // button rather than a chart.
+    let _ = writeln!(s, " | image={png} width={w} height={h}");
 }
 
 /// A first-run placeholder so the menu never looks broken.
