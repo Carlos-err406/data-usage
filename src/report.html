@@ -91,16 +91,18 @@
     position: relative; display: flex; align-items: flex-end; gap: 1px;
     height: 100%; border-bottom: 1px solid var(--rule);
   }
+  /* One column per period, holding a bar per class side by side. The 1px
+     inner gap against the chart's own 1px between columns is what separates
+     a pair from its neighbours. */
   .col {
-    flex: 1 1 0; height: 100%; display: flex; flex-direction: column;
-    justify-content: flex-end; border-radius: 3px 3px 0 0; position: relative;
+    flex: 1 1 0; height: 100%; display: flex; align-items: flex-end;
+    gap: 1px; padding: 0 1px; border-radius: 3px 3px 0 0; position: relative;
   }
   .col:hover, .col.on { background: var(--hover); }
-  .seg { width: 100%; }
-  .seg.mobile { background: var(--mobile); }
-  .seg.wifi   { background: var(--wifi); }
-  .seg.wired  { background: var(--wired); }
-  .seg:first-of-type { border-radius: 3px 3px 0 0; }
+  .bar { flex: 1 1 0; min-width: 0; border-radius: 2px 2px 0 0; }
+  .bar.mobile { background: var(--mobile); }
+  .bar.wifi   { background: var(--wifi); }
+  .bar.wired  { background: var(--wired); }
   .axis {
     display: flex; gap: 1px; margin-top: 5px;
     font-size: 9.5px; color: var(--faint);
@@ -229,7 +231,14 @@ function place(evt) {
 
 function draw(data, chartId, axisId, capId, everyNth) {
   const chart = el(chartId);
-  const peak = Math.max(...data.map(total), 0);
+  // Mobile and Wi-Fi always get a bar — the split is the point of the app, and
+  // an absent bar reads as missing rather than as nothing used. Ethernet only
+  // when it is in use, so an always-empty third bar does not eat the width.
+  const active = CLASSES.filter(([k]) =>
+    k !== "wired" || data.some(d => d[k][0] + d[k][1] > 0));
+  // Bars sit side by side, so the scale is the tallest single bar. Scaling to
+  // the period total instead would mean nothing ever reaches the top.
+  const peak = Math.max(...data.flatMap(d => active.map(([k]) => d[k][0] + d[k][1])), 0);
   const sum = data.reduce((a,d) => a + total(d), 0);
   // Naming the peak explains the scale: without it, one big hour makes every
   // other bar look like nothing went on.
@@ -247,13 +256,13 @@ function draw(data, chartId, axisId, capId, everyNth) {
   data.forEach((d, i) => {
     const col = document.createElement("div");
     col.className = "col";
-    for (const [k] of [...CLASSES].reverse()) {
+    for (const [k] of active) {
       const v = d[k][0] + d[k][1];
-      if (v === 0) continue;
-      const seg = document.createElement("div");
-      seg.className = "seg " + k;
-      seg.style.height = Math.max(2, Math.ceil(v / peak * PLOT_H)) + "px";
-      col.appendChild(seg);
+      const bar = document.createElement("div");
+      bar.className = "bar " + k;
+      // Round up so a period with any traffic never renders as nothing.
+      bar.style.height = v ? Math.max(2, Math.ceil(v / peak * PLOT_H)) + "px" : "0px";
+      col.appendChild(bar);
     }
     col.addEventListener("mouseenter", e => { col.classList.add("on"); showTip(e, d); });
     col.addEventListener("mousemove", place);

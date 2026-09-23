@@ -105,6 +105,12 @@ every byte sent over a VPN.
 charts, where hovering any bar gives the exact split for that hour or day. That
 is the whole interface.
 
+Each period gets one bar per class side by side rather than a single stacked
+bar, so mobile and Wi-Fi can be compared directly. The charts scale to the
+tallest single bar, not the period total — with bars beside each other rather
+than on top of each other, scaling to the total would mean nothing ever reached
+the top of the plot.
+
 **Right-clicking opens a short context menu** with the only things the popover
 cannot do: pinning the current network's classification, and revealing the
 database. A web page in SwiftBar's popover has no channel back to the plugin,
