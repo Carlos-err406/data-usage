@@ -89,7 +89,7 @@ fn ansi(code: u8, text: &str) -> String {
 const DIM: u8 = 245;
 
 /// Parameters that open the interactive page in a web view popover.
-const POPOVER: &str = "webview=true webvieww=560 webviewh=580";
+const POPOVER: &str = "webview=true webvieww=560 webviewh=508";
 
 /// Row colour matching the chart bars.
 fn class_code(c: Class) -> u8 {

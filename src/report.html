@@ -4,135 +4,160 @@
 <style>
   :root {
     color-scheme: light dark;
-    --bg: #ffffff;
+    --bg: #f2f2f7;
+    --panel: #ffffff;
     --fg: #1d1d1f;
-    --dim: #8e8e93;
-    --rule: rgba(0,0,0,.12);
+    --dim: #6e6e73;
+    --faint: #a1a1a6;
+    --rule: rgba(0,0,0,.09);
+    --grid: rgba(0,0,0,.055);
     --hover: rgba(0,0,0,.05);
+    --track: rgba(0,0,0,.07);
     --mobile: #ff9500;
     --wifi: #007aff;
     --wired: #34c759;
-    --tip-bg: rgba(250,250,250,.98);
-    --tip-shadow: rgba(0,0,0,.22);
+    --shadow: 0 1px 3px rgba(0,0,0,.09);
+    --tip-bg: #ffffff;
+    --tip-shadow: 0 6px 22px rgba(0,0,0,.20);
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #1e1e1e;
+      --bg: #1c1c1e;
+      --panel: #262629;
       --fg: #f5f5f7;
-      --rule: rgba(255,255,255,.14);
-      --hover: rgba(255,255,255,.07);
+      --dim: #9b9ba0;
+      --faint: #6b6b70;
+      --rule: rgba(255,255,255,.10);
+      --grid: rgba(255,255,255,.06);
+      --hover: rgba(255,255,255,.06);
+      --track: rgba(255,255,255,.10);
       --mobile: #ff9f0a;
       --wifi: #0a84ff;
       --wired: #30d158;
-      --tip-bg: rgba(44,44,46,.98);
-      --tip-shadow: rgba(0,0,0,.5);
+      --shadow: none;
+      --tip-bg: #323236;
+      --tip-shadow: 0 6px 22px rgba(0,0,0,.55);
     }
   }
   * { box-sizing: border-box; }
   body {
-    margin: 0; padding: 14px 16px 16px;
+    margin: 0; padding: 14px;
     background: var(--bg); color: var(--fg);
-    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
     -webkit-user-select: none; user-select: none;
+    -webkit-font-smoothing: antialiased;
   }
-  h2 {
-    margin: 0 0 2px; font-size: 12px; font-weight: 600; color: var(--dim);
-    letter-spacing: .02em;
+  .num { font-variant-numeric: tabular-nums; }
+
+  .card {
+    background: var(--panel); border-radius: 11px;
+    padding: 12px 14px 13px; box-shadow: var(--shadow);
   }
-  .sub { margin: 0 0 8px; font-size: 11px; color: var(--dim); }
-  section + section { margin-top: 18px; }
+  .card + .card { margin-top: 10px; }
+
+  /* Section label: small, quiet, with a value pinned to the right. */
+  .cap {
+    display: flex; align-items: baseline; justify-content: space-between;
+    font-size: 11px; color: var(--dim); letter-spacing: .04em;
+    text-transform: uppercase; margin-bottom: 8px;
+  }
+  .cap b { font-weight: 600; }
+  .cap .r { text-transform: none; letter-spacing: 0; color: var(--faint); }
+
+  /* Hero: today's total is the one number worth reading from across the room. */
+  .hero { display: flex; align-items: baseline; gap: 10px; }
+  .hero .big { font-size: 30px; font-weight: 600; letter-spacing: -.02em; line-height: 1.1; }
+  .hero .split { font-size: 12px; color: var(--dim); }
+  .hero .split span + span { margin-left: 10px; }
+
+  /* Proportion bar — the mobile/Wi-Fi split as one glance, not a table. */
+  .share {
+    display: flex; height: 6px; border-radius: 3px; overflow: hidden;
+    background: var(--track); margin: 11px 0 9px;
+  }
+  .share div { height: 100%; }
+
+  .keys { display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 12px; }
+  .keys .k { display: flex; align-items: center; gap: 6px; }
+  .keys .sw { width: 8px; height: 8px; border-radius: 2px; flex: none; }
+  .keys .nm { color: var(--dim); }
+  .keys .vl { font-weight: 500; }
+
+  /* Charts */
+  .plot { position: relative; height: 86px; }
+  .grid { position: absolute; inset: 0; }
+  .grid div { position: absolute; left: 0; right: 0; border-top: 1px solid var(--grid); }
   .chart {
-    display: flex; align-items: flex-end; gap: 1px;
-    height: 110px; border-bottom: 1px solid var(--rule);
+    position: relative; display: flex; align-items: flex-end; gap: 1px;
+    height: 100%; border-bottom: 1px solid var(--rule);
   }
   .col {
-    flex: 1 1 0; height: 100%;
-    display: flex; flex-direction: column; justify-content: flex-end;
-    border-radius: 2px 2px 0 0; cursor: default; position: relative;
+    flex: 1 1 0; height: 100%; display: flex; flex-direction: column;
+    justify-content: flex-end; border-radius: 3px 3px 0 0; position: relative;
   }
-  .col:hover { background: var(--hover); }
-  .col.on { background: var(--hover); }
+  .col:hover, .col.on { background: var(--hover); }
   .seg { width: 100%; }
   .seg.mobile { background: var(--mobile); }
   .seg.wifi   { background: var(--wifi); }
   .seg.wired  { background: var(--wired); }
-  .seg:first-of-type { border-radius: 2px 2px 0 0; }
+  .seg:first-of-type { border-radius: 3px 3px 0 0; }
   .axis {
-    display: flex; gap: 1px; margin-top: 4px;
-    font-size: 9px; color: var(--dim); font-variant-numeric: tabular-nums;
+    display: flex; gap: 1px; margin-top: 5px;
+    font-size: 9.5px; color: var(--faint);
   }
   .axis span { flex: 1 1 0; text-align: center; overflow: hidden; }
-  .legend {
-    display: flex; gap: 14px; margin-top: 14px;
-    font-size: 11px; color: var(--dim); align-items: center;
+  .empty { color: var(--faint); font-size: 11px; height: 86px; display: grid; place-items: center; }
+
+  footer {
+    display: flex; justify-content: space-between; gap: 12px;
+    margin-top: 11px; padding: 0 2px;
+    font-size: 11px; color: var(--faint);
   }
-  .legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 5px; }
-  /* Left-clicking the icon opens this popover, so the menu — and the actions
-     in it — are only reachable on right-click. Say so, or they are lost. */
-  .legend .hint { margin-left: auto; opacity: .75; }
-  .empty { color: var(--dim); font-size: 11px; padding: 34px 0; text-align: center; }
-  header { margin-bottom: 18px; }
-  .date { font-size: 13px; font-weight: 600; margin-bottom: 8px; }
-  .totals {
-    border-spacing: 0; font-variant-numeric: tabular-nums;
-    font-size: 12px; width: 100%; max-width: 380px;
-  }
-  .totals th {
-    font-weight: 400; color: var(--dim); text-align: right;
-    font-size: 11px; padding: 0 0 3px 14px;
-  }
-  .totals th:first-child { text-align: left; padding-left: 0; }
-  .totals td { text-align: right; padding: 2px 0 2px 14px; }
-  .totals td:first-child { text-align: left; padding-left: 0; }
-  .totals tr.tot td { border-top: 1px solid var(--rule); color: var(--dim); padding-top: 4px; }
-  .totals i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 6px; }
-  .link { margin-top: 10px; font-size: 11px; color: var(--dim); }
+
   #tip {
-    /* absolute rather than fixed: the page never scrolls, so the two behave
-       identically, and position() adds the scroll offset regardless. */
     position: absolute; pointer-events: none; opacity: 0;
-    transition: opacity .08s ease;
-    background: var(--tip-bg); border-radius: 7px;
-    box-shadow: 0 3px 14px var(--tip-shadow);
-    padding: 8px 10px; font-size: 12px; min-width: 150px;
-    border: 1px solid var(--rule); z-index: 10;
+    transition: opacity .09s ease;
+    background: var(--tip-bg); border-radius: 8px; box-shadow: var(--tip-shadow);
+    padding: 9px 11px; font-size: 12px; min-width: 160px; z-index: 10;
   }
   #tip.show { opacity: 1; }
-  #tip .when { font-weight: 600; margin-bottom: 5px; }
+  #tip .when { font-weight: 600; margin-bottom: 6px; font-size: 12px; }
   #tip table { border-spacing: 0; width: 100%; font-variant-numeric: tabular-nums; }
-  #tip td { padding: 1px 0; }
-  #tip td.k { color: var(--dim); padding-right: 12px; }
-  #tip td.v { text-align: right; }
-  #tip tr.tot td { border-top: 1px solid var(--rule); padding-top: 3px; }
-  #tip .dot { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 5px; }
+  #tip td { padding: 1.5px 0; }
+  #tip td.k { color: var(--dim); padding-right: 16px; white-space: nowrap; }
+  #tip td.v { text-align: right; font-weight: 500; }
+  #tip tr.sub td.k { color: var(--faint); padding-left: 14px; }
+  #tip tr.sub td.v { font-weight: 400; color: var(--dim); }
+  #tip tr.tot td { border-top: 1px solid var(--rule); padding-top: 4px; }
+  #tip .sw { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 6px; }
 </style>
 
-<header>
-  <div class="date" id="date"></div>
-  <table class="totals" id="totals"></table>
-  <div class="link" id="link"></div>
-</header>
-
-<section>
-  <h2>Last 24 hours</h2>
-  <p class="sub" id="sub-h"></p>
-  <div class="chart" id="hours"></div>
-  <div class="axis" id="axis-h"></div>
-</section>
-
-<section>
-  <h2>Last 30 days</h2>
-  <p class="sub" id="sub-d"></p>
-  <div class="chart" id="days"></div>
-  <div class="axis" id="axis-d"></div>
-</section>
-
-<div class="legend">
-  <span><i style="background:var(--mobile)"></i>Mobile</span>
-  <span><i style="background:var(--wifi)"></i>Wi-Fi</span>
-  <span><i style="background:var(--wired)"></i>Ethernet</span>
-  <span class="hint">Right-click the menu bar icon for settings</span>
+<div class="card">
+  <div class="cap"><b>Today</b><span class="r" id="date"></span></div>
+  <div class="hero">
+    <div class="big num" id="total"></div>
+    <div class="split num" id="split"></div>
+  </div>
+  <div class="share" id="share"></div>
+  <div class="keys" id="keys"></div>
 </div>
+
+<div class="card">
+  <div class="cap"><b>Last 24 hours</b><span class="r" id="cap-h"></span></div>
+  <div class="plot"><div class="grid"></div><div class="chart" id="hours"></div></div>
+  <div class="axis" id="axis-h"></div>
+</div>
+
+<div class="card">
+  <div class="cap"><b>Last 30 days</b><span class="r" id="cap-d"></span></div>
+  <div class="plot"><div class="grid"></div><div class="chart" id="days"></div></div>
+  <div class="axis" id="axis-d"></div>
+</div>
+
+<footer>
+  <span id="link"></span>
+  <span>Right-click the icon for settings</span>
+</footer>
 
 <div id="tip"></div>
 
@@ -142,6 +167,7 @@ const LINK  = "__LINK__";
 const HOURS = "__HOURS__";
 const DAYS  = "__DAYS__";
 const CLASSES = [["mobile","Mobile"],["wifi","Wi-Fi"],["wired","Ethernet"]];
+const PLOT_H = 86;
 
 function fmt(n) {
   const U = [["TB",1e12],["GB",1e9],["MB",1e6],["KB",1e3]];
@@ -151,89 +177,96 @@ function fmt(n) {
   return n + " B";
 }
 const total = d => CLASSES.reduce((a,[k]) => a + d[k][0] + d[k][1], 0);
+const el = id => document.getElementById(id);
+const tip = el("tip");
 
-const tip = document.getElementById("tip");
+function head() {
+  const t = TODAY.total[0] + TODAY.total[1];
+  el("date").textContent = TODAY.date;
+  el("total").textContent = fmt(t);
+  el("split").innerHTML =
+    `<span>↓ ${fmt(TODAY.total[0])}</span><span>↑ ${fmt(TODAY.total[1])}</span>`;
+
+  const used = TODAY.rows.filter(r => r.rx + r.tx > 0);
+  el("share").innerHTML = used
+    .map(r => `<div style="background:var(--${r.key});width:${(r.rx+r.tx)/t*100}%"></div>`)
+    .join("");
+  // Always name mobile and Wi-Fi, even at zero — that split is the point of
+  // the app, and an absent row reads as missing rather than as nothing used.
+  el("keys").innerHTML = TODAY.rows
+    .filter(r => r.key !== "wired" || r.rx + r.tx > 0)
+    .map(r => `<span class="k"><i class="sw" style="background:var(--${r.key})"></i>` +
+              `<span class="nm">${r.name}</span><span class="vl num">${fmt(r.rx+r.tx)}</span></span>`)
+    .join("");
+  el("link").textContent = LINK ? "Now on " + LINK : "Offline";
+}
 
 function showTip(evt, d) {
   const rows = CLASSES
     .filter(([k]) => d[k][0] + d[k][1] > 0)
     .map(([k,name]) =>
-      `<tr><td class="k"><i class="dot" style="background:var(--${k})"></i>${name}</td>` +
+      `<tr><td class="k"><i class="sw" style="background:var(--${k})"></i>${name}</td>` +
       `<td class="v">${fmt(d[k][0]+d[k][1])}</td></tr>` +
-      `<tr><td class="k" style="padding-left:12px">↓ down</td><td class="v">${fmt(d[k][0])}</td></tr>` +
-      `<tr><td class="k" style="padding-left:12px">↑ up</td><td class="v">${fmt(d[k][1])}</td></tr>`)
+      `<tr class="sub"><td class="k">↓ down</td><td class="v">${fmt(d[k][0])}</td></tr>` +
+      `<tr class="sub"><td class="k">↑ up</td><td class="v">${fmt(d[k][1])}</td></tr>`)
     .join("");
   const t = total(d);
-  tip.innerHTML =
-    `<div class="when">${d.title}</div>` +
-    (t === 0 ? `<div style="color:var(--dim)">No traffic</div>`
+  tip.innerHTML = `<div class="when">${d.title}</div>` +
+    (t === 0 ? `<div style="color:var(--faint)">No traffic</div>`
              : `<table>${rows}<tr class="tot"><td class="k">Total</td><td class="v">${fmt(t)}</td></tr></table>`);
   tip.classList.add("show");
-  position(evt);
+  place(evt);
 }
 
-function position(evt) {
-  const pad = 12, r = tip.getBoundingClientRect();
+function place(evt) {
+  const pad = 14, r = tip.getBoundingClientRect();
   let x = evt.clientX + pad, y = evt.clientY + pad;
-  if (x + r.width > window.innerWidth - 4) x = evt.clientX - r.width - pad;
-  if (y + r.height > window.innerHeight - 4) y = evt.clientY - r.height - pad;
-  // Viewport coords -> document coords, for absolute positioning.
-  tip.style.left = (Math.max(4, x) + window.scrollX) + "px";
-  tip.style.top = (Math.max(4, y) + window.scrollY) + "px";
+  if (x + r.width > window.innerWidth - 6) x = evt.clientX - r.width - pad;
+  if (y + r.height > window.innerHeight - 6) y = evt.clientY - r.height - pad;
+  tip.style.left = (Math.max(6, x) + window.scrollX) + "px";
+  tip.style.top = (Math.max(6, y) + window.scrollY) + "px";
 }
 
-function draw(data, chartId, axisId, subId, everyNth) {
-  const chart = document.getElementById(chartId);
-  const axis = document.getElementById(axisId);
+function draw(data, chartId, axisId, capId, everyNth) {
+  const chart = el(chartId);
   const peak = Math.max(...data.map(total), 0);
   const sum = data.reduce((a,d) => a + total(d), 0);
-  document.getElementById(subId).textContent = fmt(sum) + " total";
+  // Naming the peak explains the scale: without it, one big hour makes every
+  // other bar look like nothing went on.
+  el(capId).textContent = peak > 0 ? `${fmt(sum)} · peak ${fmt(peak)}` : "";
 
   if (peak === 0) {
-    chart.outerHTML = `<div class="empty">No traffic recorded yet</div>`;
+    chart.closest(".plot").outerHTML = `<div class="empty">No traffic recorded yet</div>`;
     return;
   }
+
+  // Quarter gridlines give the empty upper area some structure.
+  chart.previousElementSibling.innerHTML =
+    [.25,.5,.75,1].map(f => `<div style="top:${(1-f)*100}%"></div>`).join("");
 
   data.forEach((d, i) => {
     const col = document.createElement("div");
     col.className = "col";
-    // Stack downward in DOM order so mobile ends up at the bottom of the bar.
     for (const [k] of [...CLASSES].reverse()) {
       const v = d[k][0] + d[k][1];
       if (v === 0) continue;
       const seg = document.createElement("div");
       seg.className = "seg " + k;
-      // Round up so a non-zero hour is never invisible.
-      seg.style.height = Math.max(1, Math.ceil(v / peak * 110)) + "px";
+      seg.style.height = Math.max(2, Math.ceil(v / peak * PLOT_H)) + "px";
       col.appendChild(seg);
     }
     col.addEventListener("mouseenter", e => { col.classList.add("on"); showTip(e, d); });
-    col.addEventListener("mousemove", position);
+    col.addEventListener("mousemove", place);
     col.addEventListener("mouseleave", () => { col.classList.remove("on"); tip.classList.remove("show"); });
     chart.appendChild(col);
 
     const lab = document.createElement("span");
     lab.textContent = i % everyNth === 0 ? d.label : "";
-    axis.appendChild(lab);
+    el(axisId).appendChild(lab);
   });
 }
 
-function header() {
-  document.getElementById("date").textContent = "Today · " + TODAY.date;
-  const body = TODAY.rows
-    .filter(r => r.rx + r.tx > 0 || r.key !== "wired")
-    .map(r =>
-      `<tr><td><i style="background:var(--${r.key})"></i>${r.name}</td>` +
-      `<td>${fmt(r.rx + r.tx)}</td><td>${fmt(r.rx)}</td><td>${fmt(r.tx)}</td></tr>`)
-    .join("");
-  document.getElementById("totals").innerHTML =
-    `<tr><th>&nbsp;</th><th>total</th><th>↓ down</th><th>↑ up</th></tr>` + body +
-    `<tr class="tot"><td>Total</td><td>${fmt(TODAY.total[0]+TODAY.total[1])}</td>` +
-    `<td>${fmt(TODAY.total[0])}</td><td>${fmt(TODAY.total[1])}</td></tr>`;
-  document.getElementById("link").textContent = LINK ? "Now on " + LINK : "Offline";
-}
-
-header();
-draw(HOURS, "hours", "axis-h", "sub-h", 3);
-draw(DAYS, "days", "axis-d", "sub-d", 5);
+head();
+draw(HOURS, "hours", "axis-h", "cap-h", 3);
+draw(DAYS, "days", "axis-d", "cap-d", 5);
 </script>
