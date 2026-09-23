@@ -62,7 +62,7 @@ fn series_json(series: &[(i64, Totals)], fmt: &str) -> String {
         let title = Local
             .timestamp_opt(*start, 0)
             .earliest()
-            .map(|d| d.format("%a %-d %b, %H:%M").to_string())
+            .map(|d| d.format("%a %-d %b, %-I:%M %p").to_string())
             .unwrap_or_default();
         let mut parts = Vec::new();
         for class in Class::ALL {
@@ -139,7 +139,7 @@ pub fn html(store: &Store, link: Option<&str>) -> String {
     };
 
     TEMPLATE
-        .replace("\"__HOURS__\"", &series_json(&hours, "%H"))
+        .replace("\"__HOURS__\"", &series_json(&hours, "%-I%P"))
         .replace("\"__DAYS__\"", &series_json(&days, "%-d"))
         .replace("\"__TODAY__\"", &today_json(store))
         .replace("__DAYSLABEL__", &days_label)
