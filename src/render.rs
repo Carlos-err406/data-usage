@@ -49,7 +49,7 @@ const DIM: u8 = 245;
 /// Parameters that open the interactive page in a web view popover.
 /// Height includes SwiftBar's own 28pt titlebar plus its 4pt top padding,
 /// which sit above the web view and eat into whatever is asked for here.
-const POPOVER: &str = "webview=true webvieww=560 webviewh=536";
+const POPOVER: &str = "webview=true webvieww=376 webviewh=524";
 
 /// Regenerate the interactive page and return its URL.
 pub fn ensure_report(sampler: &mut Sampler) -> Option<String> {
