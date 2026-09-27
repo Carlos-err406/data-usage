@@ -96,8 +96,11 @@
   /* Transparent columns over the plot, one per period, carry the hover. */
   .chart .hits { position: absolute; inset: 0; display: flex; }
   .chart .hits div { flex: 1 1 0; }
+  /* A fixed height, not one set by the labels: fit() measures the page before
+     draw() fills them in, and an axis that is 0pt tall at that moment makes the
+     charts grow by exactly the room the labels then take back. */
   .axis {
-    display: flex; margin-top: 5px;
+    display: flex; margin-top: 5px; height: 14px; line-height: 14px;
     font-size: 9.5px; color: var(--faint);
   }
   .axis span { flex: 1 1 0; text-align: center; white-space: nowrap; }
@@ -111,6 +114,10 @@
 
   #tip {
     position: absolute; pointer-events: none; opacity: 0;
+    /* Parked inside the viewport until place() moves it. Left at its default
+       spot after the footer, the invisible tooltip still counts toward the
+       page's height and made the popover scroll by its own height. */
+    top: 0; left: 0;
     transition: opacity .09s ease;
     background: var(--tip-bg); border-radius: 8px; box-shadow: var(--tip-shadow);
     padding: 9px 11px; font-size: 12px; min-width: 160px; z-index: 10;
@@ -164,7 +171,9 @@ const LINK  = "__LINK__";
 const HOURS = "__HOURS__";
 const DAYS  = "__DAYS__";
 const CLASSES = [["mobile","Mobile"],["wifi","Wi-Fi"],["wired","Ethernet"]];
+// Chart height when the popover gives exactly the room it was asked for.
 const PLOT_H = 86;
+const MIN_PLOT_H = 48;
 
 function fmt(n) {
   const U = [["TB",1e12],["GB",1e9],["MB",1e6],["KB",1e3]];
@@ -232,6 +241,8 @@ function place(evt) {
 
 function draw(data, chartId, axisId, capId, everyNth) {
   const chart = el(chartId);
+  el(axisId).innerHTML = "";
+  if (!chart) return; // already replaced by the empty-state placeholder
   // Mobile and Wi-Fi always get a line — the split is the point of the app.
   // Ethernet only when something used it.
   const active = CLASSES.filter(([k]) =>
@@ -246,7 +257,8 @@ function draw(data, chartId, axisId, capId, everyNth) {
   // Tracking starts once and runs on, so the tracked periods are a suffix.
   const t0 = data.findIndex(d => d.tracked);
   if (peak === 0 || t0 < 0) {
-    chart.closest(".plot").outerHTML = `<div class="empty">No traffic recorded yet</div>`;
+    const plot = chart.closest(".plot");
+    plot.outerHTML = `<div class="empty" style="height:${plot.style.height || PLOT_H + "px"}">No traffic recorded yet</div>`;
     return;
   }
 
@@ -254,7 +266,7 @@ function draw(data, chartId, axisId, capId, everyNth) {
   chart.previousElementSibling.innerHTML =
     [.25,.5,.75,1].map(f => `<div style="top:${(1-f)*100}%"></div>`).join("");
 
-  const W = chart.clientWidth, H = PLOT_H, n = data.length;
+  const W = chart.clientWidth, H = chart.clientHeight, n = data.length;
   const x = i => (i + 0.5) * W / n;
   // Headroom so the stroke at the peak is not clipped by the top edge.
   const y = v => H - 1 - (v / peak) * (H - 4);
@@ -323,7 +335,27 @@ function draw(data, chartId, axisId, capId, everyNth) {
   });
 }
 
+// The popover's height is the page's natural height at PLOT_H, which is right
+// for a SwiftBar that draws nothing above the web view. Stock SwiftBar puts a
+// 32pt title bar inside that height, so the page gets less than it asked for.
+// Rather than scroll, the charts give up the difference between them — and
+// take up any extra, so no build leaves an empty band under the footer.
+function fit() {
+  const plots = [...document.querySelectorAll(".plot, .empty")];
+  plots.forEach(p => p.style.height = PLOT_H + "px");
+  const spare = window.innerHeight - document.body.scrollHeight;
+  const h = Math.max(MIN_PLOT_H, PLOT_H + spare / plots.length);
+  plots.forEach(p => p.style.height = h + "px");
+}
+
+function render() {
+  fit();
+  draw(HOURS, "hours", "axis-h", "cap-h", 3);
+  draw(DAYS, "days", "axis-d", "cap-d", 5);
+}
+
 head();
-draw(HOURS, "hours", "axis-h", "cap-h", 3);
-draw(DAYS, "days", "axis-d", "cap-d", 5);
+render();
+// In case the web view is sized after the page first lays out.
+window.addEventListener("resize", render);
 </script>

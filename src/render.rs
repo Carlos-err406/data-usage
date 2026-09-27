@@ -47,9 +47,11 @@ fn ansi(code: u8, text: &str) -> String {
 const DIM: u8 = 245;
 
 /// Parameters that open the interactive page in a web view popover.
-/// Height includes SwiftBar's own 28pt titlebar plus its 4pt top padding,
-/// which sit above the web view and eat into whatever is asked for here.
-const POPOVER: &str = "webview=true webvieww=376 webviewh=524";
+/// The height is the page's natural height, which fits a SwiftBar that draws
+/// nothing above the web view. Stock SwiftBar draws a 32pt title bar inside it;
+/// the page absorbs that by shortening its charts (see `fit` in report.html),
+/// so either build fits without scrolling.
+const POPOVER: &str = "webview=true webvieww=376 webviewh=493";
 
 /// Regenerate the interactive page and return its URL.
 pub fn ensure_report(sampler: &mut Sampler) -> Option<String> {
