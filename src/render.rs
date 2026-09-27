@@ -71,8 +71,8 @@ pub fn ensure_report(sampler: &mut Sampler) -> Option<String> {
 pub fn title(rate: Rate, href: Option<&str>) -> String {
     let mut out = format!(
         "↓{} ↑{} | {BAR_FONT}",
-        units::rate(rate.rx),
-        units::rate(rate.tx)
+        units::padded_rate(rate.rx),
+        units::padded_rate(rate.tx)
     );
     if let Some(url) = href {
         out.push_str(&format!(" href={url} {POPOVER}"));
@@ -139,7 +139,8 @@ pub fn dropdown(sampler: &mut Sampler, exe: &str) -> String {
     s
 }
 
-/// A first-run placeholder so the menu bar never looks broken.
+/// A first-run placeholder so the menu bar never looks broken. Same field
+/// widths as [`title`], so the item does not change size when data arrives.
 pub fn boot_title() -> String {
-    format!("↓ – ↑ – | {BAR_FONT}")
+    format!("↓{:>4} ↑{:>4} | {BAR_FONT}", "–", "–")
 }
