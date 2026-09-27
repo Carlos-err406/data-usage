@@ -8,26 +8,18 @@ resetting daily and keeping history for graphs.
 A single 1.4 MB Rust binary that runs as a [SwiftBar](https://swiftbar.app)
 plugin. No app bundle, no code signing.
 
-```
-↓1.2M ↑340K                          ← menu bar: fixed width, refreshed every 2s
+<p align="center">
+  <img src="docs/popover-dark.png" width="376" alt="The popover in dark mode: today's total with a mobile and Wi-Fi split, and line charts for the last 24 hours and 30 days, with a tooltip on 6 PM showing mobile 573 MB and Wi-Fi 286 MB">
+  <img src="docs/popover-light.png" width="376" alt="The same popover in light mode, without a tooltip">
+</p>
 
-left-click → popover
-┌───────────────────────────────┐
-│ TODAY           Sunday 27 Sep │
-│ 939 MB    ↓ 704 MB   ↑ 235 MB │
-│ ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ │  ← mobile / Wi-Fi share
-│ ■ Mobile 464 MB  ■ Wi-Fi 474 MB│
-├───────────────────────────────┤
-│ LAST 24 HOURS     peak 464 MB │
-│ ╱╲__╱‾╲___          ╱╲  ╱     │  ← a line per class,
-├───────────────────────────────┤     hover any hour or day
-│ SINCE 22 SEP     peak 27.5 GB │
-│                    ╱╲         │
-└───────────────────────────────┘
- Now on en0 · Wi-Fi · net d2:78:86
+<p align="center"><sub>Demo data.</sub></p>
 
-right-click → Count this network as Mobile · Back to automatic · Reveal database
-```
+- **Menu bar** — live throughput, e.g. `↓1.2M ↑340K`, refreshed every 2 seconds
+- **Left-click** — the popover above: today's totals, and charts where hovering
+  any hour or day gives the exact split
+- **Right-click** — *Count this network as Mobile*, *Back to automatic*,
+  *Reveal database*
 
 ## Install
 
