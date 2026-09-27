@@ -50,19 +50,31 @@ fn json_escape(s: &str) -> String {
     out
 }
 
-/// One series as a JSON array of `{label, title, mobile:[rx,tx], ...}`.
-fn series_json(series: &[(i64, Totals)], fmt: &str) -> String {
+/// One series as a JSON array of `{label, title, tracked, mobile:[rx,tx], ...}`.
+///
+/// `tracked` is false for periods that ended before the first recorded
+/// bucket. The chart needs it to tell "no data" from "no traffic": a line
+/// drawn at zero across days before tracking began would claim nothing was
+/// used, when really nothing was being measured.
+fn series_json(
+    series: &[(i64, Totals)],
+    label_fmt: &str,
+    title_fmt: &str,
+    step: i64,
+    first: Option<i64>,
+) -> String {
     let mut items = Vec::with_capacity(series.len());
     for (start, totals) in series {
+        let tracked = first.is_some_and(|f| start + step > f);
         let label = Local
             .timestamp_opt(*start, 0)
             .earliest()
-            .map(|d| d.format(fmt).to_string())
+            .map(|d| d.format(label_fmt).to_string())
             .unwrap_or_default();
         let title = Local
             .timestamp_opt(*start, 0)
             .earliest()
-            .map(|d| d.format("%a %-d %b, %-I:%M %p").to_string())
+            .map(|d| d.format(title_fmt).to_string())
             .unwrap_or_default();
         let mut parts = Vec::new();
         for class in Class::ALL {
@@ -70,9 +82,10 @@ fn series_json(series: &[(i64, Totals)], fmt: &str) -> String {
             parts.push(format!("\"{}\":[{},{}]", class.key(), rx, tx));
         }
         items.push(format!(
-            "{{\"label\":\"{}\",\"title\":\"{}\",{}}}",
+            "{{\"label\":\"{}\",\"title\":\"{}\",\"tracked\":{},{}}}",
             json_escape(&label),
             json_escape(&title),
+            tracked,
             parts.join(",")
         ));
     }
@@ -124,8 +137,9 @@ pub fn html(store: &Store, link: Option<&str>) -> String {
 
     // Saying when tracking began is the honest caption for a 30-day chart with
     // two days in it — otherwise 28 empty columns read as 28 idle days.
-    let days_label = match store.first_bucket() {
-        Ok(Some(first)) if first > days_from => Local
+    let first = store.first_bucket().ok().flatten();
+    let days_label = match first {
+        Some(first) if first > days_from => Local
             .timestamp_opt(first, 0)
             .earliest()
             .map(|d| format!("Since {}", d.format("%-d %b")))
@@ -139,8 +153,15 @@ pub fn html(store: &Store, link: Option<&str>) -> String {
     };
 
     TEMPLATE
-        .replace("\"__HOURS__\"", &series_json(&hours, "%-I%P"))
-        .replace("\"__DAYS__\"", &series_json(&days, "%-d"))
+        .replace(
+            "\"__HOURS__\"",
+            &series_json(&hours, "%-I%P", "%a %-d %b, %-I:%M %p", 3600, first),
+        )
+        // A day's tooltip names the day; a time on a daily bucket means nothing.
+        .replace(
+            "\"__DAYS__\"",
+            &series_json(&days, "%-d", "%A %-d %B", 86400, first),
+        )
         .replace("\"__TODAY__\"", &today_json(store))
         .replace("__DAYSLABEL__", &days_label)
         .replace("\"__LINK__\"", &link_json)

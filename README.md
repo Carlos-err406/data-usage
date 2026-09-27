@@ -6,21 +6,27 @@ Live network data usage in the macOS menu bar, split by **mobile** vs **Wi-Fi**,
 resetting daily and keeping history for graphs.
 
 A single 1.4 MB Rust binary that runs as a [SwiftBar](https://swiftbar.app)
-plugin. No app bundle, no code signing, no webview.
+plugin. No app bundle, no code signing.
 
 ```
-↓1.2M ↑340K                     ← menu bar, refreshed every 2s
-────────────────────────────
-Today · Tuesday 22 September
- Mobile      2.41 GB   ↓2.10 GB ↑312 MB
- Wi-Fi       14.8 GB   ↓13.9 GB ↑904 MB
- Total       17.2 GB
-────────────────────────────
-Last 24 hours   ▁▁▂▅█▆▄▃▂  (stacked bar chart)
-Last 30 days    ▄▅▃█▆▅▇▄▂
-────────────────────────────
-Now on en0 · Wi-Fi
-Count as Mobile
+↓1.2M ↑340K                          ← menu bar: fixed width, refreshed every 2s
+
+left-click → popover
+┌───────────────────────────────┐
+│ TODAY           Sunday 27 Sep │
+│ 939 MB    ↓ 704 MB   ↑ 235 MB │
+│ ▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░ │  ← mobile / Wi-Fi share
+│ ■ Mobile 464 MB  ■ Wi-Fi 474 MB│
+├───────────────────────────────┤
+│ LAST 24 HOURS     peak 464 MB │
+│ ╱╲__╱‾╲___          ╱╲  ╱     │  ← a line per class,
+├───────────────────────────────┤     hover any hour or day
+│ SINCE 22 SEP     peak 27.5 GB │
+│                    ╱╲         │
+└───────────────────────────────┘
+ Now on en0 · Wi-Fi · net d2:78:86
+
+right-click → Count this network as Mobile · Back to automatic · Reveal database
 ```
 
 ## Install
@@ -102,14 +108,18 @@ every byte sent over a VPN.
 ## The popover
 
 **Left-clicking the menu bar item opens a popover** with today's totals and both
-charts, where hovering any bar gives the exact split for that hour or day. That
-is the whole interface.
+charts, where hovering any point gives the exact split for that hour or day.
+That is the whole interface.
 
-Each period gets one bar per class side by side rather than a single stacked
-bar, so mobile and Wi-Fi can be compared directly. The charts scale to the
-tallest single bar, not the period total — with bars beside each other rather
-than on top of each other, scaling to the total would mean nothing ever reached
-the top of the plot.
+Each chart draws one line per class, so mobile and Wi-Fi can be compared
+directly, scaled to the largest single value. Lines begin at the first tracked
+period: before it there is no data, and a line along zero would claim there was
+no traffic. Hovering an earlier period says it was not tracked yet.
+
+The menu bar title is a constant width — each rate right-aligned in a
+four-character field of a monospaced font. SwiftBar sizes the item to its title
+and anchors the popover to it, so a title that changed width would slide the
+open popover sideways on every refresh.
 
 **Right-clicking opens a short context menu** with the only things the popover
 cannot do: pinning the current network's classification, and revealing the

@@ -88,25 +88,16 @@
   .plot { position: relative; height: 86px; }
   .grid { position: absolute; inset: 0; }
   .grid div { position: absolute; left: 0; right: 0; border-top: 1px solid var(--grid); }
-  .chart {
-    position: relative; display: flex; align-items: flex-end; gap: 3px;
-    height: 100%; border-bottom: 1px solid var(--rule);
-  }
-  /* One column per period, holding a bar per class side by side. The bars of
-     a pair touch and pairs are 3px apart: at this width that separation is
-     what reads as grouping, and any gap inside a pair is width taken from the
-     bars themselves. */
-  .col {
-    flex: 1 1 0; height: 100%; display: flex; align-items: flex-end;
-    border-radius: 3px 3px 0 0; position: relative;
-  }
-  .col:hover, .col.on { background: var(--hover); }
-  .bar { flex: 1 1 0; min-width: 0; border-radius: 2px 2px 0 0; }
-  .bar.mobile { background: var(--mobile); }
-  .bar.wifi   { background: var(--wifi); }
-  .bar.wired  { background: var(--wired); }
+  .chart { position: relative; height: 100%; border-bottom: 1px solid var(--rule); }
+  .chart svg { position: absolute; left: 0; top: 0; overflow: visible; }
+  .chart .line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+  .chart .guide { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0; }
+  .chart .dot { stroke: var(--panel); stroke-width: 1.5; opacity: 0; }
+  /* Transparent columns over the plot, one per period, carry the hover. */
+  .chart .hits { position: absolute; inset: 0; display: flex; }
+  .chart .hits div { flex: 1 1 0; }
   .axis {
-    display: flex; gap: 3px; margin-top: 5px;
+    display: flex; margin-top: 5px;
     font-size: 9.5px; color: var(--faint);
   }
   .axis span { flex: 1 1 0; text-align: center; white-space: nowrap; }
@@ -134,10 +125,9 @@
   #tip tr.sub td.v { font-weight: 400; color: var(--dim); }
   #tip tr.tot td { border-top: 1px solid var(--rule); padding-top: 4px; }
   #tip .sw { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 6px; }
-  /* The link line grows with detail (metered, low data mode, manual pin), so
-     it gives way to the hint rather than pushing it onto a second line. */
+  /* The link line grows with detail (metered, low data mode, manual pin); if
+     it ever outgrows the popover it truncates rather than wrapping. */
   footer #link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  footer .hint { flex: none; }
 </style>
 
 <div class="card">
@@ -164,7 +154,6 @@
 
 <footer>
   <span id="link"></span>
-  <span class="hint">Right-click for settings</span>
 </footer>
 
 <div id="tip"></div>
@@ -219,6 +208,12 @@ function showTip(evt, d) {
       `<tr class="sub"><td class="k">↑ up</td><td class="v">${fmt(d[k][1])}</td></tr>`)
     .join("");
   const t = total(d);
+  if (!d.tracked) {
+    tip.innerHTML = `<div class="when">${d.title}</div><div style="color:var(--faint)">Not tracked yet</div>`;
+    tip.classList.add("show");
+    place(evt);
+    return;
+  }
   tip.innerHTML = `<div class="when">${d.title}</div>` +
     (t === 0 ? `<div style="color:var(--faint)">No traffic</div>`
              : `<table>${rows}<tr class="tot"><td class="k">Total</td><td class="v">${fmt(t)}</td></tr></table>`);
@@ -237,20 +232,20 @@ function place(evt) {
 
 function draw(data, chartId, axisId, capId, everyNth) {
   const chart = el(chartId);
-  // Mobile and Wi-Fi always get a bar — the split is the point of the app, and
-  // an absent bar reads as missing rather than as nothing used. Ethernet only
-  // when it is in use, so an always-empty third bar does not eat the width.
+  // Mobile and Wi-Fi always get a line — the split is the point of the app.
+  // Ethernet only when something used it.
   const active = CLASSES.filter(([k]) =>
     k !== "wired" || data.some(d => d[k][0] + d[k][1] > 0));
-  // Bars sit side by side, so the scale is the tallest single bar. Scaling to
-  // the period total instead would mean nothing ever reaches the top.
-  const peak = Math.max(...data.flatMap(d => active.map(([k]) => d[k][0] + d[k][1])), 0);
+  const val = (d, k) => d[k][0] + d[k][1];
+  const peak = Math.max(...data.flatMap(d => active.map(([k]) => val(d, k))), 0);
   const sum = data.reduce((a,d) => a + total(d), 0);
   // Naming the peak explains the scale: without it, one big hour makes every
-  // other bar look like nothing went on.
+  // other point look like nothing went on.
   el(capId).textContent = peak > 0 ? `${fmt(sum)} · peak ${fmt(peak)}` : "";
 
-  if (peak === 0) {
+  // Tracking starts once and runs on, so the tracked periods are a suffix.
+  const t0 = data.findIndex(d => d.tracked);
+  if (peak === 0 || t0 < 0) {
     chart.closest(".plot").outerHTML = `<div class="empty">No traffic recorded yet</div>`;
     return;
   }
@@ -259,22 +254,69 @@ function draw(data, chartId, axisId, capId, everyNth) {
   chart.previousElementSibling.innerHTML =
     [.25,.5,.75,1].map(f => `<div style="top:${(1-f)*100}%"></div>`).join("");
 
-  data.forEach((d, i) => {
-    const col = document.createElement("div");
-    col.className = "col";
-    for (const [k] of active) {
-      const v = d[k][0] + d[k][1];
-      const bar = document.createElement("div");
-      bar.className = "bar " + k;
-      // Round up so a period with any traffic never renders as nothing.
-      bar.style.height = v ? Math.max(2, Math.ceil(v / peak * PLOT_H)) + "px" : "0px";
-      col.appendChild(bar);
-    }
-    col.addEventListener("mouseenter", e => { col.classList.add("on"); showTip(e, d); });
-    col.addEventListener("mousemove", place);
-    col.addEventListener("mouseleave", () => { col.classList.remove("on"); tip.classList.remove("show"); });
-    chart.appendChild(col);
+  const W = chart.clientWidth, H = PLOT_H, n = data.length;
+  const x = i => (i + 0.5) * W / n;
+  // Headroom so the stroke at the peak is not clipped by the top edge.
+  const y = v => H - 1 - (v / peak) * (H - 4);
+  const f1 = v => v.toFixed(1);
 
+  let svg = `<svg width="${W}" height="${H}"><defs>`;
+  for (const [k] of active) {
+    svg += `<linearGradient id="g-${chartId}-${k}" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" style="stop-color:var(--${k});stop-opacity:.30"/>` +
+      `<stop offset="1" style="stop-color:var(--${k});stop-opacity:0"/></linearGradient>`;
+  }
+  svg += `</defs>`;
+  // Lines start at the first tracked period. Before it there is no data, and
+  // a line along zero would say there was no traffic. Wi-Fi is drawn first so
+  // mobile — the series worth not losing — sits on top where they cross.
+  for (const [k] of [...active].reverse()) {
+    const pts = [];
+    for (let i = t0; i < n; i++) pts.push(`${f1(x(i))},${f1(y(val(data[i], k)))}`);
+    if (pts.length === 1) {
+      // A single period has no segment to draw; mark the point instead.
+      svg += `<circle cx="${f1(x(t0))}" cy="${f1(y(val(data[t0], k)))}" r="2.5" style="fill:var(--${k})"/>`;
+      continue;
+    }
+    const line = "M" + pts.join(" L");
+    const area = `${line} L${f1(x(n - 1))},${H} L${f1(x(t0))},${H} Z`;
+    svg += `<path d="${area}" style="fill:url(#g-${chartId}-${k})"/>` +
+           `<path class="line" d="${line}" style="stroke:var(--${k})"/>`;
+  }
+  svg += `<line class="guide" y1="0" y2="${H}"/>`;
+  for (const [k] of active) svg += `<circle class="dot" data-k="${k}" r="3" style="fill:var(--${k})"/>`;
+  svg += `</svg>`;
+
+  chart.innerHTML = svg + `<div class="hits">` +
+    data.map((_, i) => `<div data-i="${i}"></div>`).join("") + `</div>`;
+
+  const guide = chart.querySelector(".guide");
+  const dots = [...chart.querySelectorAll(".dot")];
+  const clear = () => {
+    guide.style.opacity = 0;
+    dots.forEach(c => c.style.opacity = 0);
+    tip.classList.remove("show");
+  };
+  chart.querySelectorAll("[data-i]").forEach(h => {
+    const i = +h.dataset.i, d = data[i];
+    h.addEventListener("mouseenter", e => {
+      if (d.tracked) {
+        guide.setAttribute("x1", x(i));
+        guide.setAttribute("x2", x(i));
+        guide.style.opacity = 1;
+        dots.forEach(c => {
+          c.setAttribute("cx", x(i));
+          c.setAttribute("cy", y(val(d, c.dataset.k)));
+          c.style.opacity = 1;
+        });
+      }
+      showTip(e, d);
+    });
+    h.addEventListener("mousemove", place);
+    h.addEventListener("mouseleave", clear);
+  });
+
+  data.forEach((d, i) => {
     const lab = document.createElement("span");
     lab.textContent = i % everyNth === 0 ? d.label : "";
     el(axisId).appendChild(lab);
