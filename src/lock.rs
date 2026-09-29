@@ -15,7 +15,12 @@ pub struct AccountingLock {
 
 /// Returns None when another instance is already accounting.
 pub fn acquire() -> Option<AccountingLock> {
-    let path = crate::store::data_dir().join("accounting.lock");
+    acquire_named("accounting.lock")
+}
+
+/// The same guard under another name, for a different single-instance job.
+pub fn acquire_named(name: &str) -> Option<AccountingLock> {
+    let path = crate::store::data_dir().join(name);
     let file = OpenOptions::new()
         .create(true)
         .append(true)

@@ -3,6 +3,7 @@
 //! Runs as a SwiftBar streamable plugin: it prints a menu, then a `~~~`
 //! separator, then the next menu, forever.
 
+mod apps;
 mod classify;
 mod ifstat;
 mod lock;
@@ -29,6 +30,7 @@ fn main() {
         Some("set-class") => cmd_set_class(),
         Some("once") => cmd_once(),
         Some("status") => cmd_status(),
+        Some("apps") => apps::run(),
         Some("stream") | None => cmd_stream(),
         Some(other) => {
             eprintln!("unknown command: {other}");
@@ -61,6 +63,9 @@ fn cmd_stream() {
     };
     let mut sampler = sampler::Sampler::new(store);
     let exe = exe_path();
+    if sampler.is_accounting() {
+        apps::ensure_running(&exe);
+    }
 
     // The first tick only establishes a baseline, so show it as such rather
     // than reporting a rate of zero.
@@ -105,6 +110,12 @@ fn cmd_once() {
     // One read: the delta is measured against the checkpoint the previous run
     // left behind, so there is nothing to wait around for.
     sampler.tick();
+    // Only the instance doing the accounting keeps the per-app helper going:
+    // the helper stops once accounting has, and must not be restarted by a
+    // stray read-only run.
+    if sampler.is_accounting() {
+        apps::ensure_running(&exe_path());
+    }
     // The page has to exist before the title line can point at it.
     let href = render::ensure_report(&mut sampler);
     println!("{}", render::title(sampler.rate(), href.as_deref()));

@@ -32,6 +32,8 @@ pub struct Sampler {
     /// it. This is how a short-lived refresh run derives a rate: it has no
     /// history of its own to difference against.
     checkpoint: Option<(f64, u64, u64)>,
+    /// When this instance last ticked, so a tick knows the span it covers.
+    prev_tick: Option<i64>,
     net_ids: netid::Cache,
     /// None when another instance already holds the accounting lock, in which
     /// case this sampler reads and displays but never writes.
@@ -55,6 +57,7 @@ impl Sampler {
             last: HashMap::new(),
             window: Vec::new(),
             checkpoint: None,
+            prev_tick: None,
             net_ids: netid::Cache::default(),
             lock: crate::lock::acquire(),
         }
@@ -141,8 +144,16 @@ impl Sampler {
             seen.push((c.name.clone(), c.rx, c.tx));
         }
 
+        // The seconds this tick's bytes accumulated over: since this
+        // instance's last tick, or for a refresh run, since the checkpoint it
+        // resumed from. Neither on a first-ever tick, which only sets the
+        // baseline and has nothing to report.
+        let span = self.prev_tick.or(resumed_from).map(|t| (now - t).max(1));
+        self.prev_tick = Some(now);
         if accounting {
-            let _ = self.store.commit_tick(bucket_of(now), &added, &seen, now);
+            let _ = self
+                .store
+                .commit_tick(bucket_of(now), &added, &seen, now, span);
         }
 
         let (rx, tx) = added

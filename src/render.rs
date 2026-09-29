@@ -51,15 +51,17 @@ const DIM: u8 = 245;
 /// nothing above the web view. Stock SwiftBar draws a 32pt title bar inside it;
 /// the page absorbs that by shortening its charts (see `fit` in report.html),
 /// so either build fits without scrolling.
-const POPOVER: &str = "webview=true webvieww=376 webviewh=493";
+const POPOVER: &str = "webview=true webvieww=376 webviewh=668";
 
 /// Regenerate the interactive page and return its URL.
 pub fn ensure_report(sampler: &mut Sampler) -> Option<String> {
-    let link = sampler
-        .current_link()
+    let current = sampler.current_link();
+    let link = current
+        .as_ref()
         .map(|l| format!("{} · {}", l.iface, l.detail));
+    let class = current.and_then(|l| l.class);
     let page = crate::store::data_dir().join("report.html");
-    report::write_if_changed(&sampler.store, &page, link.as_deref())
+    report::write_if_changed(&sampler.store, &page, link.as_deref(), class)
         .ok()
         .map(|_| file_url(&page))
 }

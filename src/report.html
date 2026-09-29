@@ -85,10 +85,17 @@
   .keys .vl { font-weight: 500; }
 
   /* Charts */
-  .plot { position: relative; height: 86px; }
+  /* The value labels sit in a gutter to the right of the plot rather than over
+     it, where the most recent — most looked-at — periods are drawn. */
+  .plot { position: relative; height: 86px; --gutter: 38px; }
   .grid { position: absolute; inset: 0; }
-  .grid div { position: absolute; left: 0; right: 0; border-top: 1px solid var(--grid); }
-  .chart { position: relative; height: 100%; border-bottom: 1px solid var(--rule); }
+  .grid div { position: absolute; left: 0; right: var(--gutter); border-top: 1px solid var(--grid); }
+  .grid span {
+    position: absolute; right: 0; width: calc(var(--gutter) - 6px);
+    transform: translateY(-50%); line-height: 1;
+    font-size: 9.5px; color: var(--faint); white-space: nowrap;
+  }
+  .chart { position: relative; height: 100%; margin-right: var(--gutter); border-bottom: 1px solid var(--rule); }
   .chart svg { position: absolute; left: 0; top: 0; overflow: visible; }
   .chart .line { fill: none; stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
   .chart .guide { stroke: var(--faint); stroke-width: 1; stroke-dasharray: 2 2; opacity: 0; }
@@ -101,10 +108,51 @@
      charts grow by exactly the room the labels then take back. */
   .axis {
     display: flex; margin-top: 5px; height: 14px; line-height: 14px;
-    font-size: 9.5px; color: var(--faint);
+    font-size: 9.5px; color: var(--faint); margin-right: 38px;
   }
   .axis span { flex: 1 1 0; text-align: center; white-space: nowrap; }
-  .empty { color: var(--faint); font-size: 11px; height: 86px; display: grid; place-items: center; }
+  /* The live chart's axis names only its two ends. */
+  .axis.ends { justify-content: space-between; }
+  .axis.ends span { flex: none; }
+  .chart .up { fill: none; stroke-width: 1.25; stroke-linejoin: round; opacity: .55; }
+  .cap .r .up { opacity: .7; }
+  /* Apps: a fixed five rows tall whatever the data, so the charts below do
+     not shift as apps come and go. */
+  .apps { height: 114px; }
+  .apps .row {
+    display: grid; grid-template-columns: 16px minmax(0, 1fr) 58px 50px 52px 28px; gap: 6px;
+    align-items: center; height: 19px; font-size: 12px;
+    margin: 0 -5px; padding: 0 5px; border-radius: 4px;
+  }
+  .apps .row:hover { background: var(--hover); }
+  .apps .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .apps .vl { text-align: right; font-weight: 500; white-space: nowrap; }
+  /* Its own column, so the mobile figures line up down the card. */
+  .apps .mob { text-align: right; color: var(--mobile); white-space: nowrap; }
+  .apps .ic { width: 16px; height: 16px; border-radius: 4px; }
+  /* Stands in for an app with no icon to show, or for "Other". */
+  .apps .ph {
+    display: grid; place-items: center; background: var(--track);
+    color: var(--dim); font-size: 9px; font-weight: 600;
+  }
+  .apps .own { color: var(--faint); }
+  .apps .other .nm { color: var(--dim); }
+  /* What the app is moving right now, if anything, dotted in its link's colour. */
+  .apps .now {
+    display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    font-size: 10px; color: var(--dim); white-space: nowrap;
+  }
+  .apps .now i { width: 5px; height: 5px; border-radius: 50%; flex: none; }
+  .apps .pct { text-align: right; font-size: 11px; color: var(--faint); }
+  /* The whole traffic, faded back while one app's is drawn over it. */
+  .chart .dim { opacity: .22; }
+  .apps .none { height: 100%; display: grid; place-items: center; color: var(--faint); font-size: 11px; }
+  .chart .nodata { height: 100%; display: grid; place-items: center; color: var(--faint); font-size: 11px; }
+  /* The timeframe tabs, full width over the cards they drive: the totals, the
+     history chart and the apps. Live, which is always now, sits below them. */
+  .ranges { display: flex; font-size: 11px; line-height: 18px; }
+  .ranges span { flex: 1 1 0; text-align: center; }
+  .ranges + .card { margin-top: 10px; }
 
   footer {
     display: flex; justify-content: space-between; gap: 12px;
@@ -134,11 +182,21 @@
   #tip .sw { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 6px; }
   /* The link line grows with detail (metered, low data mode, manual pin); if
      it ever outgrows the popover it truncates rather than wrapping. */
+  /* Linear / log switch. Sized to the footer's own line so flipping it, or
+     adding it, never changes the page height fit() works from. */
+  .scale {
+    flex: none; display: flex; padding: 1px; border-radius: 5px;
+    background: var(--track); font-size: 10px; line-height: 14px; cursor: default;
+  }
+  .scale span { padding: 0 6px; border-radius: 4px; color: var(--faint); }
+  .scale span.on { background: var(--panel); color: var(--fg); box-shadow: var(--shadow); }
   footer #link { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>
 
+<div class="scale ranges" id="range" title="Timeframe (← →)"></div>
+
 <div class="card">
-  <div class="cap"><b>Today</b><span class="r" id="date"></span></div>
+  <div class="cap"><b id="hero-title"></b><span class="r" id="date"></span></div>
   <div class="hero">
     <div class="big num" id="total"></div>
     <div class="split num" id="split"></div>
@@ -148,28 +206,50 @@
 </div>
 
 <div class="card">
-  <div class="cap"><b>Last 24 hours</b><span class="r" id="cap-h"></span></div>
-  <div class="plot"><div class="grid"></div><div class="chart" id="hours"></div></div>
-  <div class="axis" id="axis-h"></div>
+  <div class="cap"><b id="hist-title"></b><span class="r num" id="cap-hist"></span></div>
+  <div class="plot"><div class="grid"></div><div class="chart" id="hist"></div></div>
+  <div class="axis" id="axis-hist"></div>
 </div>
 
 <div class="card">
-  <div class="cap"><b>__DAYSLABEL__</b><span class="r" id="cap-d"></span></div>
-  <div class="plot"><div class="grid"></div><div class="chart" id="days"></div></div>
-  <div class="axis" id="axis-d"></div>
+  <div class="cap"><b>Apps</b><span class="r" id="cap-apps"></span></div>
+  <div class="apps" id="apps"></div>
+</div>
+
+<div class="card">
+  <div class="cap"><b>Live</b><span class="r num" id="cap-l"></span></div>
+  <div class="plot fixed" style="height:60px"><div class="grid"></div><div class="chart" id="live"></div></div>
+  <div class="axis ends"><span id="live-from"></span><span>now</span></div>
 </div>
 
 <footer>
   <span id="link"></span>
+  <span class="scale" id="scale" title="Vertical scale"><span data-s="lin">Linear</span><span data-s="log">Log</span></span>
 </footer>
 
 <div id="tip"></div>
 
 <script>
-const TODAY = "__TODAY__";
-const LINK  = "__LINK__";
-const HOURS = "__HOURS__";
-const DAYS  = "__DAYS__";
+// Replaced whenever a fresher copy of this page reports in; see poll().
+let LINK  = "__LINK__";
+// The history chart's timeframes, each {key, tab, title, every, data}.
+let RANGES = "__RANGES__";
+// Icons by app, as data URIs; which apps are busy now, as {app: [down/s,
+// up/s, class]}; and when per-app tracking began.
+let ICONS  = "__ICONS__";
+let APPNOW = "__APPNOW__";
+let APPSFROM = "__APPSFROM__";
+// The app whose usage the history chart is showing, while one is hovered.
+let HIGHLIGHT = null;
+let LIVE  = "__LIVE__";
+
+// Loaded by poll() as a hidden frame, this page is only a courier: it hands
+// its data to the page that loaded it, and draws nothing.
+const COURIER = window.parent !== window;
+if (COURIER) {
+  parent.postMessage({dataUsage: {LINK, RANGES, ICONS, APPNOW, APPSFROM, LIVE}}, "*");
+}
+const APP_ROWS = 5;
 const CLASSES = [["mobile","Mobile"],["wifi","Wi-Fi"],["wired","Ethernet"]];
 // Chart height when the popover gives exactly the room it was asked for.
 const PLOT_H = 86;
@@ -182,24 +262,62 @@ function fmt(n) {
   }
   return n + " B";
 }
+// Tick labels are round numbers, so "2 GB" rather than fmt's "2.00 GB".
+function tickFmt(n) {
+  const U = [["TB",1e12],["GB",1e9],["MB",1e6],["KB",1e3]];
+  for (const [u,s] of U) if (n >= s) return +(n/s).toFixed(2) + " " + u;
+  return n === 0 ? "0" : n + " B";
+}
+// Mobile often runs a tenth of Wi-Fi or less, which a linear scale flattens
+// onto the baseline; the log scale gives each decade the same height. The
+// choice is remembered, where the web view allows it.
+let LOG = false;
+try { LOG = localStorage.getItem("scale") === "log"; } catch (e) {}
+let RANGE = "today";
+try { RANGE = localStorage.getItem("range") || RANGE; } catch (e) {}
+if (!RANGES.some(r => r.key === RANGE)) RANGE = RANGES[0].key;
+
+// The smallest 1, 2 or 5 times a power of ten that is at least v.
+function niceCeil(v) {
+  const mag = 10 ** Math.floor(Math.log10(v));
+  for (const m of [1, 2, 5, 10]) if (m * mag >= v * (1 - 1e-9)) return m * mag;
+  return 10 * mag;
+}
+
+// The smallest 1-2-2.5-5 step that covers the peak in at most four divisions.
+function niceStep(peak) {
+  const mag = 10 ** Math.floor(Math.log10(peak / 4));
+  for (const m of [1, 2, 2.5, 5, 10]) if (peak / (m * mag) <= 4) return Math.max(1, m * mag);
+  return 10 * mag;
+}
 const total = d => CLASSES.reduce((a,[k]) => a + d[k][0] + d[k][1], 0);
 const el = id => document.getElementById(id);
+const esc = t => t.replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"})[c]);
 const tip = el("tip");
 
+// The main card: the timeframe's total, down and up, and its class split —
+// summed from the same periods the history chart draws, so the two agree.
 function head() {
-  const t = TODAY.total[0] + TODAY.total[1];
-  el("date").textContent = TODAY.date;
+  const r = range();
+  const rows = CLASSES.map(([key, name]) => ({
+    key, name,
+    rx: r.data.reduce((a, d) => a + d[key][0], 0),
+    tx: r.data.reduce((a, d) => a + d[key][1], 0),
+  }));
+  const rx = rows.reduce((a, c) => a + c.rx, 0), tx = rows.reduce((a, c) => a + c.tx, 0);
+  const t = rx + tx;
+  el("hero-title").textContent = r.title;
+  el("date").textContent = r.span;
   el("total").textContent = fmt(t);
-  el("split").innerHTML =
-    `<span>↓ ${fmt(TODAY.total[0])}</span><span>↑ ${fmt(TODAY.total[1])}</span>`;
+  el("split").innerHTML = `<span>↓ ${fmt(rx)}</span><span>↑ ${fmt(tx)}</span>`;
 
-  const used = TODAY.rows.filter(r => r.rx + r.tx > 0);
+  const used = rows.filter(r => r.rx + r.tx > 0);
   el("share").innerHTML = used
     .map(r => `<div style="background:var(--${r.key});width:${(r.rx+r.tx)/t*100}%"></div>`)
     .join("");
   // Always name mobile and Wi-Fi, even at zero — that split is the point of
   // the app, and an absent row reads as missing rather than as nothing used.
-  el("keys").innerHTML = TODAY.rows
+  el("keys").innerHTML = rows
     .filter(r => r.key !== "wired" || r.rx + r.tx > 0)
     .map(r => `<span class="k"><i class="sw" style="background:var(--${r.key})"></i>` +
               `<span class="nm">${r.name}</span><span class="vl num">${fmt(r.rx+r.tx)}</span></span>`)
@@ -239,10 +357,173 @@ function place(evt) {
   tip.style.top = (Math.max(6, y) + window.scrollY) + "px";
 }
 
-function draw(data, chartId, axisId, capId, everyNth) {
+const f1 = v => v.toFixed(1);
+
+// The vertical scale for a chart: draws its gridlines and their labels, and
+// returns the value-to-y mapping. `low` is the smallest non-zero value shown.
+function scale(chart, peak, low) {
+  const H = chart.clientHeight;
+  let frac;
+  const ticks = [];
+  if (LOG) {
+    // Topped at the 1, 2 or 5 just above the peak rather than the next whole
+    // decade, which could leave most of a decade empty over the data. Below
+    // that, whole decades down to the one holding the smallest value, but two
+    // to four of them. Anything under the bottom one, zero included, sits on
+    // the baseline.
+    const top = niceCeil(peak), hi = Math.log10(top), whole = Math.ceil(hi - 1e-9);
+    const lo = Math.min(whole - 2, Math.max(whole - 4, Math.floor(Math.log10(low))));
+    frac = v => v <= 0 ? 0 : Math.max(0, (Math.log10(v) - lo) / (hi - lo));
+    for (let e = lo; e < hi - 1e-9; e++) ticks.push(10 ** e);
+    ticks.push(top);
+  } else {
+    // Topped at the round number just above the peak, so each gridline reads
+    // as a value rather than a fraction of whatever peaked.
+    const step = niceStep(peak);
+    const top = Math.ceil(peak / step) * step;
+    frac = v => v / top;
+    for (let t = 0; t <= top + step / 2; t += step) ticks.push(t);
+  }
+  // Headroom so the stroke at the top is not clipped by the edge.
+  const y = v => H - 1 - frac(v) * (H - 4);
+
+  // Working down from the top, a tick too close to the one above it is
+  // dropped rather than drawn on top of it — as with 1 GB under a 2 GB top.
+  const kept = [];
+  for (const t of [...ticks].reverse()) {
+    if (!kept.length || y(t) - y(kept[kept.length - 1]) >= 11) kept.push(t);
+  }
+  // A tick on the baseline gets a label but no gridline; the chart's bottom
+  // rule is its line.
+  chart.previousElementSibling.innerHTML = kept.map(t =>
+    (y(t) < H - 2 ? `<div style="top:${f1(y(t))}px"></div>` : "") +
+    `<span class="num" style="top:${f1(y(t))}px">${tickFmt(t)}</span>`).join("");
+  return y;
+}
+
+// Throughput over the last few minutes. Each tick's bytes are spread evenly
+// over the seconds it covered, so the line steps: a refresh that came late
+// shows as one wide step at the average, not as a spike.
+function drawLive() {
+  const chart = el("live");
+  const {now, secs, k: linkClass, pts} = LIVE;
+  const from = now - secs;
+  el("live-from").textContent = `${secs / 60} min ago`;
+  const steps = pts
+    .map(([t, span, rx, tx, k]) => ({a: Math.max(from, t - span), b: t, start: t - span,
+                                       rx: rx / span, tx: tx / span, k: k || linkClass || "wifi"}))
+    .filter(s => s.b > from);
+  const last = steps[steps.length - 1];
+  el("cap-l").innerHTML = last
+    ? `↓ ${fmt(last.rx)}/s <span class="up">↑ ${fmt(last.tx)}/s</span>` : "";
+
+  const W = chart.clientWidth, H = chart.clientHeight;
+  // A floor under the peak, so an idle link draws a flat line at the bottom
+  // rather than blowing a few bytes up to full height.
+  const peak = Math.max(10e3, ...steps.map(s => Math.max(s.rx, s.tx)));
+  const low = Math.min(peak, ...steps.flatMap(s => [s.rx, s.tx]).filter(v => v > 0));
+  const y = scale(chart, peak, low);
+  const x = t => (t - from) / secs * W;
+
+  // Download is filled and coloured by the class that carried it, one run per
+  // unbroken stretch of the same class; upload is a lighter line over it.
+  const runs = [];
+  for (const s of steps) {
+    const run = runs[runs.length - 1];
+    const joined = run && run.end === s.a;
+    if (joined && run.k === s.k) run.steps.push(s);
+    else runs.push({k: s.k, steps: [s], from: joined ? run.steps[run.steps.length - 1].rx : null});
+    runs[runs.length - 1].end = s.b;
+  }
+  let svg = `<svg width="${W}" height="${H}"><defs>`;
+  for (const k of new Set(runs.map(r => r.k))) {
+    svg += `<linearGradient id="g-live-${k}" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" style="stop-color:var(--${k});stop-opacity:.30"/>` +
+      `<stop offset="1" style="stop-color:var(--${k});stop-opacity:0"/></linearGradient>`;
+  }
+  svg += `</defs>`;
+  for (const r of runs) {
+    const x0 = f1(x(r.steps[0].a));
+    // A run that carries straight on from another starts with the step
+    // between them, so the outline has no break where the colour changes.
+    let line = r.from === null ? `M${x0},${f1(y(r.steps[0].rx))}` : `M${x0},${f1(y(r.from))}`;
+    for (const s of r.steps) line += ` L${f1(x(s.a))},${f1(y(s.rx))} L${f1(x(s.b))},${f1(y(s.rx))}`;
+    const area = `M${x0},${H} L${x0},${f1(y(r.steps[0].rx))}` +
+      r.steps.map(s => ` L${f1(x(s.a))},${f1(y(s.rx))} L${f1(x(s.b))},${f1(y(s.rx))}`).join("") +
+      ` L${f1(x(r.end))},${H} Z`;
+    svg += `<path d="${area}" style="fill:url(#g-live-${r.k})"/>` +
+           `<path class="line" d="${line}" style="stroke:var(--${r.k})"/>`;
+  }
+  let up = "", prevB = null;
+  for (const s of steps) {
+    up += (s.a === prevB ? " L" : " M") + `${f1(x(s.a))},${f1(y(s.tx))} L${f1(x(s.b))},${f1(y(s.tx))}`;
+    prevB = s.b;
+  }
+  if (up) svg += `<path class="up" d="${up}" style="stroke:var(--${linkClass || "wifi"})"/>`;
+  svg += `<line class="guide" y1="0" y2="${H}"/>` +
+    `<circle class="dot" data-d="rx" r="3"/><circle class="dot" data-d="tx" r="2.5"/>`;
+  chart.innerHTML = svg + `</svg>`;
+  liveChart = {steps, from, secs, W, x, y};
+  // The chart is redrawn every second, under a pointer that has not moved:
+  // put the hover back on whatever is under it now.
+  if (liveHover) liveShow(liveHover);
+}
+
+// The live chart's last drawing, and the pointer event hovering it, if any.
+let liveChart = null, liveHover = null;
+
+const clock = ts => new Date(ts * 1000)
+  .toLocaleTimeString([], {hour: "numeric", minute: "2-digit", second: "2-digit"});
+
+// Hover on the live chart: the tick under the pointer, as rates.
+function liveShow(e) {
+  const chart = el("live");
+  if (!liveChart) return;
+  const {steps, from, secs, W, x, y} = liveChart;
+  const t = from + (e.clientX - chart.getBoundingClientRect().left) / W * secs;
+  const s = steps.find(s => s.a <= t && t <= s.b);
+  const guide = chart.querySelector(".guide");
+  const dots = [...chart.querySelectorAll(".dot")];
+  if (!s) {
+    guide.style.opacity = 0;
+    dots.forEach(c => c.style.opacity = 0);
+    tip.innerHTML = `<div class="when">${clock(t)}</div><div style="color:var(--faint)">Not measured</div>`;
+  } else {
+    const gx = f1(x(Math.min(Math.max(t, s.a), s.b)));
+    guide.setAttribute("x1", gx);
+    guide.setAttribute("x2", gx);
+    guide.style.opacity = 1;
+    dots.forEach(c => {
+      c.setAttribute("cx", gx);
+      c.setAttribute("cy", f1(y(s[c.dataset.d])));
+      c.style.fill = `var(--${s.k})`;
+      c.style.opacity = 1;
+    });
+    const name = CLASSES.find(([k]) => k === s.k)[1];
+    // A refresh that came late covers several seconds; say which.
+    const when = s.b - s.start > 3 ? `${clock(s.start)} – ${clock(s.b)}` : clock(s.b);
+    tip.innerHTML = `<div class="when">${when}</div><table>` +
+      `<tr><td class="k"><i class="sw" style="background:var(--${s.k})"></i>${name}</td>` +
+      `<td class="v">${fmt(s.rx + s.tx)}/s</td></tr>` +
+      `<tr class="sub"><td class="k">↓ down</td><td class="v">${fmt(s.rx)}/s</td></tr>` +
+      `<tr class="sub"><td class="k">↑ up</td><td class="v">${fmt(s.tx)}/s</td></tr></table>`;
+  }
+  tip.classList.add("show");
+  place(e);
+}
+
+function liveLeave() {
+  liveHover = null;
+  const chart = el("live");
+  chart.querySelectorAll(".guide, .dot").forEach(n => n.style.opacity = 0);
+  tip.classList.remove("show");
+}
+
+// `hl`, when given, is one app's usage per period ({name, s, a0}), drawn over
+// the whole traffic with the whole faded back.
+function draw(data, chartId, axisId, capId, everyNth, hl) {
   const chart = el(chartId);
   el(axisId).innerHTML = "";
-  if (!chart) return; // already replaced by the empty-state placeholder
   // Mobile and Wi-Fi always get a line — the split is the point of the app.
   // Ethernet only when something used it.
   const active = CLASSES.filter(([k]) =>
@@ -252,25 +533,23 @@ function draw(data, chartId, axisId, capId, everyNth) {
   const sum = data.reduce((a,d) => a + total(d), 0);
   // Naming the peak explains the scale: without it, one big hour makes every
   // other point look like nothing went on.
-  el(capId).textContent = peak > 0 ? `${fmt(sum)} · peak ${fmt(peak)}` : "";
+  el(capId).textContent = peak === 0 ? ""
+    : hl ? `${hl.name.split(" › ").pop()} · ${fmt(CLASSES.reduce((a, [k]) => a + hl.s[k].reduce((b, v) => b + v, 0), 0))} of ${fmt(sum)}`
+    : `${fmt(sum)} · peak ${fmt(peak)}`;
 
   // Tracking starts once and runs on, so the tracked periods are a suffix.
   const t0 = data.findIndex(d => d.tracked);
   if (peak === 0 || t0 < 0) {
-    const plot = chart.closest(".plot");
-    plot.outerHTML = `<div class="empty" style="height:${plot.style.height || PLOT_H + "px"}">No traffic recorded yet</div>`;
+    // In place, not by replacing the plot: another timeframe may have data.
+    chart.previousElementSibling.innerHTML = "";
+    chart.innerHTML = `<div class="nodata">No traffic recorded yet</div>`;
     return;
   }
 
-  // Quarter gridlines give the empty upper area some structure.
-  chart.previousElementSibling.innerHTML =
-    [.25,.5,.75,1].map(f => `<div style="top:${(1-f)*100}%"></div>`).join("");
-
   const W = chart.clientWidth, H = chart.clientHeight, n = data.length;
   const x = i => (i + 0.5) * W / n;
-  // Headroom so the stroke at the peak is not clipped by the top edge.
-  const y = v => H - 1 - (v / peak) * (H - 4);
-  const f1 = v => v.toFixed(1);
+  const vals = data.slice(t0).flatMap(d => active.map(([k]) => val(d, k)));
+  const y = scale(chart, peak, Math.min(...vals.filter(v => v > 0)));
 
   let svg = `<svg width="${W}" height="${H}"><defs>`;
   for (const [k] of active) {
@@ -282,18 +561,26 @@ function draw(data, chartId, axisId, capId, everyNth) {
   // Lines start at the first tracked period. Before it there is no data, and
   // a line along zero would say there was no traffic. Wi-Fi is drawn first so
   // mobile — the series worth not losing — sits on top where they cross.
-  for (const [k] of [...active].reverse()) {
-    const pts = [];
-    for (let i = t0; i < n; i++) pts.push(`${f1(x(i))},${f1(y(val(data[i], k)))}`);
-    if (pts.length === 1) {
+  // One class's line, and the area under it, from period `start` on.
+  const trace = (k, v, start, cls) => {
+    if (start >= n) return "";
+    if (n - start === 1) {
       // A single period has no segment to draw; mark the point instead.
-      svg += `<circle cx="${f1(x(t0))}" cy="${f1(y(val(data[t0], k)))}" r="2.5" style="fill:var(--${k})"/>`;
-      continue;
+      return `<circle class="${cls}" cx="${f1(x(start))}" cy="${f1(y(v(start)))}" r="2.5" style="fill:var(--${k})"/>`;
     }
+    const pts = [];
+    for (let i = start; i < n; i++) pts.push(`${f1(x(i))},${f1(y(v(i)))}`);
     const line = "M" + pts.join(" L");
-    const area = `${line} L${f1(x(n - 1))},${H} L${f1(x(t0))},${H} Z`;
-    svg += `<path d="${area}" style="fill:url(#g-${chartId}-${k})"/>` +
-           `<path class="line" d="${line}" style="stroke:var(--${k})"/>`;
+    const area = `${line} L${f1(x(n - 1))},${H} L${f1(x(start))},${H} Z`;
+    return `<g class="${cls}"><path d="${area}" style="fill:url(#g-${chartId}-${k})"/>` +
+           `<path class="line" d="${line}" style="stroke:var(--${k})"/></g>`;
+  };
+  for (const [k] of [...active].reverse()) svg += trace(k, i => val(data[i], k), t0, hl ? "dim" : "");
+  // The app's lines start where per-app tracking did, which may be later.
+  if (hl) {
+    for (const [k] of [...active].reverse()) {
+      if (hl.s[k].some(v => v > 0)) svg += trace(k, i => hl.s[k][i], Math.max(t0, hl.a0 ?? t0), "");
+    }
   }
   svg += `<line class="guide" y1="0" y2="${H}"/>`;
   for (const [k] of active) svg += `<circle class="dot" data-k="${k}" r="3" style="fill:var(--${k})"/>`;
@@ -330,6 +617,8 @@ function draw(data, chartId, axisId, capId, everyNth) {
 
   data.forEach((d, i) => {
     const lab = document.createElement("span");
+    // Some series label only some periods themselves — the week, only each
+    // day's first block — and leave the rest blank.
     lab.textContent = i % everyNth === 0 ? d.label : "";
     el(axisId).appendChild(lab);
   });
@@ -338,24 +627,172 @@ function draw(data, chartId, axisId, capId, everyNth) {
 // The popover's height is the page's natural height at PLOT_H, which is right
 // for a SwiftBar that draws nothing above the web view. Stock SwiftBar puts a
 // 32pt title bar inside that height, so the page gets less than it asked for.
-// Rather than scroll, the charts give up the difference between them — and
-// take up any extra, so no build leaves an empty band under the footer.
+// Rather than scroll, the history chart gives up the difference — and takes up
+// any extra, so no build leaves an empty band under the footer.
 function fit() {
-  const plots = [...document.querySelectorAll(".plot, .empty")];
+  const plots = [...document.querySelectorAll(".plot:not(.fixed)")];
   plots.forEach(p => p.style.height = PLOT_H + "px");
   const spare = window.innerHeight - document.body.scrollHeight;
   const h = Math.max(MIN_PLOT_H, PLOT_H + spare / plots.length);
   plots.forEach(p => p.style.height = h + "px");
 }
 
+const range = () => RANGES.find(r => r.key === RANGE);
+
 function render() {
+  // Before fit(), which measures the page: an empty caption is a line shorter.
+  el("hist-title").textContent = range().chart;
   fit();
-  draw(HOURS, "hours", "axis-h", "cap-h", 3);
-  draw(DAYS, "days", "axis-d", "cap-d", 5);
+  drawLive();
+  drawHistory();
 }
 
-head();
-render();
-// In case the web view is sized after the page first lays out.
-window.addEventListener("resize", render);
+function drawHistory() {
+  const r = range();
+  const app = HIGHLIGHT && r.apps.list.find(a => a.name === HIGHLIGHT);
+  draw(r.data, "hist", "axis-hist", "cap-hist", r.every, app && {...app, a0: r.apps.a0});
+}
+
+// The apps behind the history chart's timeframe, biggest first, with what
+// each is moving right now. Mobile gets its own figure in its own colour, and
+// the rest are summed into "Other" so the rows add up to the whole.
+//
+// The rows keep their order even as apps go busy and quiet: hovering one
+// draws it on the chart, and a row that moved under the pointer would swap
+// which app that is.
+function apps() {
+  const r = range();
+  const {list, other, from} = r.apps;
+  const box = el("apps");
+  // When per-app tracking began partway through the timeframe, say so beside
+  // it: for apps, "All time" only reaches back that far.
+  el("cap-apps").textContent = APPSFROM && APPSFROM > from ? `Since ${day(APPSFROM)}` : "";
+  const rows = other ? [...list, {...other, name: null}] : list;
+  if (!rows.length) {
+    box.innerHTML = `<div class="none">No app traffic recorded yet</div>`;
+    return;
+  }
+  const all = rows.reduce((a, row) => a + total(row), 0);
+  box.innerHTML = rows.map((a, i) => {
+    const mob = a.mobile[0] + a.mobile[1];
+    // "Ghostty › claude" is claude, run from Ghostty.
+    const [owner, tool] = a.name && a.name.includes(" › ") ? a.name.split(" › ") : [null, a.name];
+    const icon = a.name && ICONS[a.name]
+      ? `<img class="ic" src="${ICONS[a.name]}" alt="">`
+      : `<span class="ic ph">${a.name ? esc(tool.charAt(0).toUpperCase()) : "…"}</span>`;
+    const now = a.name && APPNOW[a.name];
+    const rate = now ? now[0] + now[1] : 0;
+    const share = total(a) / all;
+    return `<div class="row${a.name ? "" : " other"}" data-i="${i}">${icon}` +
+      `<span class="nm">${a.name ? esc(tool) : `${a.n} other app${a.n === 1 ? "" : "s"}`}` +
+      `${owner ? ` <span class="own">in ${esc(owner)}</span>` : ""}</span>` +
+      // Under 1 KB/s is background chatter, not an app at work.
+      `<span class="now num">${rate >= 1000 ? `<i style="background:var(--${now[2]})"></i>${fmt(rate)}/s` : ""}</span>` +
+      `<span class="mob num">${mob > 0 ? fmt(mob) : ""}</span>` +
+      `<span class="vl num">${fmt(total(a))}</span>` +
+      `<span class="pct num">${share < 0.01 ? "<1" : Math.round(share * 100)}%</span></div>`;
+  }).join("");
+  box.querySelectorAll(".row").forEach(row => {
+    const a = rows[+row.dataset.i];
+    const title = a.name ? esc(a.name) : `${a.n} other apps`;
+    row.addEventListener("mouseenter", e => {
+      showTip(e, {...a, title, tracked: true});
+      if (a.name) { HIGHLIGHT = a.name; drawHistory(); }
+    });
+    row.addEventListener("mousemove", place);
+    row.addEventListener("mouseleave", () => {
+      tip.classList.remove("show");
+      if (HIGHLIGHT) { HIGHLIGHT = null; drawHistory(); }
+    });
+  });
+}
+
+// A date, or for today and yesterday, the hour: "Since yesterday, 6 PM" says
+// more than "Since 28 Sep" on a 24-hour view.
+function day(ts) {
+  const d = new Date(ts * 1000), midnight = new Date();
+  midnight.setHours(0, 0, 0, 0);
+  const hour = d.toLocaleTimeString([], {hour: "numeric"});
+  if (d >= midnight) return hour;
+  if (d >= midnight - 86400e3) return `yesterday, ${hour}`;
+  return d.toLocaleDateString([], {day: "numeric", month: "short"});
+}
+
+// A segmented switch whose choice is remembered under `key`. Returns a
+// function that makes a choice, for other ways in than a click.
+function toggle(id, key, get, set) {
+  const sw = el(id);
+  const mark = () => sw.querySelectorAll("span").forEach(s =>
+    s.classList.toggle("on", s.dataset.s === get()));
+  const choose = s => {
+    if (!s || s === get()) return;
+    set(s);
+    try { localStorage.setItem(key, s); } catch (e) {}
+    mark();
+  };
+  mark();
+  sw.addEventListener("click", e => choose(e.target.dataset.s));
+  return choose;
+}
+
+// SwiftBar loads this page once per opening and never reloads it, while the
+// plugin rewrites the file every couple of seconds. So the page re-reads
+// itself: it loads the file afresh in a hidden frame, which posts its data
+// back (see COURIER). Reloading outright would work too, but would flash and
+// drop whatever the pointer is hovering. The web view may read this one file
+// and nothing else, which rules out fetching it; a frame is a navigation, and
+// navigating to this file is allowed.
+const POLL_MS = 1000;
+let courier = null;
+function poll() {
+  if (courier) courier.remove();
+  courier = document.createElement("iframe");
+  courier.style.display = "none";
+  courier.src = location.pathname + "?courier=" + Date.now();
+  document.body.appendChild(courier);
+}
+
+function receive(e) {
+  if (!courier || e.source !== courier.contentWindow || !e.data || !e.data.dataUsage) return;
+  courier.remove();
+  courier = null;
+  const d = e.data.dataUsage;
+  const changed = (a, b) => JSON.stringify(a) !== JSON.stringify(b);
+  const charts = changed(d.RANGES, RANGES);
+  const appsChanged = charts || changed(d.APPNOW, APPNOW) || changed(d.ICONS, ICONS);
+  ({LINK, RANGES, ICONS, APPNOW, APPSFROM, LIVE} = d);
+  head();
+  // Only the live chart has no hover. The others are left alone while a
+  // tooltip is up, so it never describes a chart redrawn under it; they catch
+  // up on the next poll after the pointer leaves.
+  const hovering = tip.classList.contains("show");
+  if (hovering || !charts) drawLive();
+  else render();
+  if (appsChanged && !hovering) apps();
+}
+
+if (!COURIER) {
+  head();
+  toggle("scale", "scale", () => LOG ? "log" : "lin", s => { LOG = s === "log"; render(); });
+  el("range").innerHTML = RANGES.map(r => `<span data-s="${r.key}">${r.tab}</span>`).join("");
+  const pick = toggle("range", "range", () => RANGE, s => { RANGE = s; head(); render(); apps(); });
+  // The arrow keys step through the timeframes; the popover takes key focus
+  // when it opens.
+  window.addEventListener("keydown", e => {
+    const step = {ArrowLeft: -1, ArrowRight: 1}[e.key];
+    if (!step) return;
+    const i = RANGES.findIndex(r => r.key === RANGE);
+    const next = RANGES[i + step];
+    if (next) pick(next.key);
+  });
+  apps();
+  render();
+  // In case the web view is sized after the page first lays out.
+  window.addEventListener("resize", render);
+  window.addEventListener("message", receive);
+  // On the chart element, which outlives the redraws that replace its insides.
+  el("live").addEventListener("mousemove", e => { liveHover = e; liveShow(e); });
+  el("live").addEventListener("mouseleave", liveLeave);
+  setInterval(poll, POLL_MS);
+}
 </script>
