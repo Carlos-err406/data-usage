@@ -433,14 +433,15 @@ function drawLive() {
   const y = scale(chart, peak, low);
   const x = t => (t - from) / secs * W;
 
-  // Download is filled and coloured by the class that carried it, one run per
-  // unbroken stretch of the same class; upload is a lighter line over it.
+  // Both directions are coloured by the class that carried them, one run per
+  // unbroken stretch of the same class: download filled, upload a lighter
+  // line over it.
   const runs = [];
   for (const s of steps) {
     const run = runs[runs.length - 1];
     const joined = run && run.end === s.a;
     if (joined && run.k === s.k) run.steps.push(s);
-    else runs.push({k: s.k, steps: [s], from: joined ? run.steps[run.steps.length - 1].rx : null});
+    else runs.push({k: s.k, steps: [s], from: joined ? run.steps[run.steps.length - 1] : null});
     runs[runs.length - 1].end = s.b;
   }
   let svg = `<svg width="${W}" height="${H}"><defs>`;
@@ -450,24 +451,19 @@ function drawLive() {
       `<stop offset="1" style="stop-color:var(--${k});stop-opacity:0"/></linearGradient>`;
   }
   svg += `</defs>`;
+  // A run that carries straight on from another starts with the step
+  // between them, so the outline has no break where the colour changes.
+  const trace = (r, d) => `M${f1(x(r.steps[0].a))},${f1(y((r.from || r.steps[0])[d]))}` +
+    r.steps.map(s => ` L${f1(x(s.a))},${f1(y(s[d]))} L${f1(x(s.b))},${f1(y(s[d]))}`).join("");
   for (const r of runs) {
     const x0 = f1(x(r.steps[0].a));
-    // A run that carries straight on from another starts with the step
-    // between them, so the outline has no break where the colour changes.
-    let line = r.from === null ? `M${x0},${f1(y(r.steps[0].rx))}` : `M${x0},${f1(y(r.from))}`;
-    for (const s of r.steps) line += ` L${f1(x(s.a))},${f1(y(s.rx))} L${f1(x(s.b))},${f1(y(s.rx))}`;
     const area = `M${x0},${H} L${x0},${f1(y(r.steps[0].rx))}` +
       r.steps.map(s => ` L${f1(x(s.a))},${f1(y(s.rx))} L${f1(x(s.b))},${f1(y(s.rx))}`).join("") +
       ` L${f1(x(r.end))},${H} Z`;
     svg += `<path d="${area}" style="fill:url(#g-live-${r.k})"/>` +
-           `<path class="line" d="${line}" style="stroke:var(--${r.k})"/>`;
+           `<path class="line" d="${trace(r, "rx")}" style="stroke:var(--${r.k})"/>`;
   }
-  let up = "", prevB = null;
-  for (const s of steps) {
-    up += (s.a === prevB ? " L" : " M") + `${f1(x(s.a))},${f1(y(s.tx))} L${f1(x(s.b))},${f1(y(s.tx))}`;
-    prevB = s.b;
-  }
-  if (up) svg += `<path class="up" d="${up}" style="stroke:var(--${linkClass || "wifi"})"/>`;
+  for (const r of runs) svg += `<path class="up" d="${trace(r, "tx")}" style="stroke:var(--${r.k})"/>`;
   svg += `<line class="guide" y1="0" y2="${H}"/>` +
     `<circle class="dot" data-d="rx" r="3"/><circle class="dot" data-d="tx" r="2.5"/>`;
   chart.innerHTML = svg + `</svg>`;
