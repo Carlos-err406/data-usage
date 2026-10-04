@@ -18,7 +18,8 @@ plugin. No app bundle, no code signing.
 - **Menu bar** — live throughput, e.g. `↓1.2M ↑340K`, refreshed every 2 seconds
 - **Left-click** — the popover: totals, a history chart and the apps that used
   the most, for today, 24 hours, 7 days, 30 days or all time; and live
-  throughput. Hovering any period or app gives the exact split
+  throughput. Hovering any period or app gives the exact split, and clicking
+  *N other apps* opens the full list of every app in the timeframe
 - **Right-click** — *Count this network as Mobile*, *Back to automatic*,
   *Reveal database*
 

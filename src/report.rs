@@ -157,15 +157,16 @@ fn classes_json(totals: &Totals) -> String {
 }
 
 /// The apps card for one timeframe: its top apps, each with its usage per
-/// period so the chart can draw it on hover, and everything else summed.
-/// Adds the named apps to `named`, for their icons.
+/// period so the chart can draw it on hover, and everything else summed —
+/// and listed, for the full list behind the summed row.
+/// Adds every app it names to `named`, for their icons.
 fn range_apps_json(store: &Store, slots: &[Slot], named: &mut Vec<String>) -> String {
     let mut bounds: Vec<i64> = slots.iter().map(|s| s.0).collect();
     if let Some(last) = slots.last() {
         bounds.push(last.1);
     }
     let (Some(&from), Some(&to)) = (bounds.first(), bounds.last()) else {
-        return "{\"list\":[],\"other\":null}".into();
+        return "{\"list\":[],\"other\":null,\"more\":[]}".into();
     };
     let mut apps = store.apps_between(from, to).unwrap_or_default();
     let sum = |t: &Totals| t.values().map(|(rx, tx)| rx + tx).sum::<u64>();
@@ -201,6 +202,21 @@ fn range_apps_json(store: &Store, slots: &[Slot], named: &mut Vec<String>) -> St
         })
         .collect();
 
+    // Every app past the top, by name, for the full list. No per-period
+    // series: that list covers the chart, so nothing there draws on it.
+    let more: Vec<String> = rest
+        .iter()
+        .map(|(name, totals)| {
+            if !named.contains(name) {
+                named.push(name.clone());
+            }
+            format!(
+                "{{\"name\":\"{}\",{}}}",
+                json_escape(name),
+                classes_json(totals)
+            )
+        })
+        .collect();
     let other = if rest.is_empty() {
         "null".to_string()
     } else {
@@ -223,8 +239,9 @@ fn range_apps_json(store: &Store, slots: &[Slot], named: &mut Vec<String>) -> St
         .and_then(|h| slots.iter().position(|s| s.1 > h))
         .map_or("null".into(), |i| i.to_string());
     format!(
-        "{{\"from\":{from},\"a0\":{a0},\"list\":[{}],\"other\":{other}}}",
-        list.join(",")
+        "{{\"from\":{from},\"a0\":{a0},\"list\":[{}],\"other\":{other},\"more\":[{}]}}",
+        list.join(","),
+        more.join(",")
     )
 }
 
