@@ -563,8 +563,9 @@ function draw(data, chartId, axisId, capId, everyNth, hl) {
   }
   svg += `</defs>`;
   // Lines start at the first tracked period. Before it there is no data, and
-  // a line along zero would say there was no traffic. Wi-Fi is drawn first so
-  // mobile — the series worth not losing — sits on top where they cross.
+  // a line along zero would say there was no traffic. The link in use now is
+  // drawn last, so it sits on top where the lines cross; with none, mobile —
+  // the series worth not losing — does.
   // One class's line, and the area under it, from period `start` on.
   const trace = (k, v, start, cls) => {
     if (start >= n) return "";
@@ -579,15 +580,16 @@ function draw(data, chartId, axisId, capId, everyNth, hl) {
     return `<g class="${cls}"><path d="${area}" style="fill:url(#g-${chartId}-${k})"/>` +
            `<path class="line" d="${line}" style="stroke:var(--${k})"/></g>`;
   };
-  for (const [k] of [...active].reverse()) svg += trace(k, i => val(data[i], k), t0, hl ? "dim" : "");
+  const order = [...active].reverse().sort(([a], [b]) => (a === LIVE.k) - (b === LIVE.k));
+  for (const [k] of order) svg += trace(k, i => val(data[i], k), t0, hl ? "dim" : "");
   // The app's lines start where per-app tracking did, which may be later.
   if (hl) {
-    for (const [k] of [...active].reverse()) {
+    for (const [k] of order) {
       if (hl.s[k].some(v => v > 0)) svg += trace(k, i => hl.s[k][i], Math.max(t0, hl.a0 ?? t0), "");
     }
   }
   svg += `<line class="guide" y1="0" y2="${H}"/>`;
-  for (const [k] of active) svg += `<circle class="dot" data-k="${k}" r="3" style="fill:var(--${k})"/>`;
+  for (const [k] of order) svg += `<circle class="dot" data-k="${k}" r="3" style="fill:var(--${k})"/>`;
   svg += `</svg>`;
 
   chart.innerHTML = svg + `<div class="hits">` +
