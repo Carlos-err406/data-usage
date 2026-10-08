@@ -156,9 +156,10 @@ fn classes_json(totals: &Totals) -> String {
     parts.join(",")
 }
 
-/// The apps card for one timeframe: its top apps, each with its usage per
-/// period so the chart can draw it on hover, and everything else summed —
-/// and listed, for the full list behind the summed row.
+/// The apps card for one timeframe: its top apps, everything else summed —
+/// and listed, for the full list behind the summed row. Every app comes with
+/// its usage per period, so the chart can draw whichever is hovered or pinned,
+/// the full list's included.
 /// Adds every app it names to `named`, for their icons.
 fn range_apps_json(store: &Store, slots: &[Slot], named: &mut Vec<String>) -> String {
     let mut bounds: Vec<i64> = slots.iter().map(|s| s.0).collect();
@@ -172,51 +173,44 @@ fn range_apps_json(store: &Store, slots: &[Slot], named: &mut Vec<String>) -> St
     let sum = |t: &Totals| t.values().map(|(rx, tx)| rx + tx).sum::<u64>();
     apps.sort_by(|a, b| sum(&b.1).cmp(&sum(&a.1)).then_with(|| a.0.cmp(&b.0)));
     let rest = apps.split_off(APP_ROWS.min(apps.len()));
-    let top: Vec<&str> = apps.iter().map(|(n, _)| n.as_str()).collect();
-    let series = store.app_series_at(&bounds, &top).unwrap_or_default();
+    let series = store.app_series_at(&bounds).unwrap_or_default();
 
-    let list: Vec<String> = apps
-        .iter()
-        .map(|(name, totals)| {
-            // Per period, just each class's total: enough to draw a line.
-            let per_slot = series.get(name).map(Vec::as_slice).unwrap_or(&[]);
-            let lines: Vec<String> = Class::ALL
-                .iter()
-                .map(|c| {
-                    let v: Vec<String> = per_slot
-                        .iter()
-                        .map(|t| t.get(c).map_or(0, |(rx, tx)| rx + tx).to_string())
-                        .collect();
-                    format!("\"{}\":[{}]", c.key(), v.join(","))
-                })
-                .collect();
-            if !named.contains(name) {
-                named.push(name.clone());
-            }
-            format!(
-                "{{\"name\":\"{}\",{},\"s\":{{{}}}}}",
-                json_escape(name),
-                classes_json(totals),
-                lines.join(",")
-            )
-        })
-        .collect();
+    let mut app_json = |(name, totals): &(String, Totals)| {
+        // Per period, just each class's total: enough to draw a line. Sparse,
+        // as index, value pairs, and only for the classes the app used: the
+        // full list runs to hundreds of apps, most of them idle in most
+        // periods and on one link.
+        let per_slot = series.get(name).map(Vec::as_slice).unwrap_or(&[]);
+        let lines: Vec<String> = Class::ALL
+            .iter()
+            .filter(|c| totals.get(c).is_some_and(|(rx, tx)| rx + tx > 0))
+            .map(|c| {
+                let v: Vec<String> = per_slot
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, t)| {
+                        t.get(c)
+                            .map(|(rx, tx)| rx + tx)
+                            .filter(|&v| v > 0)
+                            .map(|v| format!("{i},{v}"))
+                    })
+                    .collect();
+                format!("\"{}\":[{}]", c.key(), v.join(","))
+            })
+            .collect();
+        if !named.contains(name) {
+            named.push(name.clone());
+        }
+        format!(
+            "{{\"name\":\"{}\",{},\"s\":{{{}}}}}",
+            json_escape(name),
+            classes_json(totals),
+            lines.join(",")
+        )
+    };
+    let list: Vec<String> = apps.iter().map(&mut app_json).collect();
+    let more: Vec<String> = rest.iter().map(&mut app_json).collect();
 
-    // Every app past the top, by name, for the full list. No per-period
-    // series: that list covers the chart, so nothing there draws on it.
-    let more: Vec<String> = rest
-        .iter()
-        .map(|(name, totals)| {
-            if !named.contains(name) {
-                named.push(name.clone());
-            }
-            format!(
-                "{{\"name\":\"{}\",{}}}",
-                json_escape(name),
-                classes_json(totals)
-            )
-        })
-        .collect();
     let other = if rest.is_empty() {
         "null".to_string()
     } else {

@@ -63,6 +63,8 @@
   }
   .cap b { font-weight: 600; }
   .cap .r { text-transform: none; letter-spacing: 0; color: var(--faint); }
+  .cap .unpin { cursor: pointer; padding: 0 2px 0 4px; color: var(--dim); }
+  .cap .unpin:hover { color: var(--fg); }
 
   /* Hero: today's total is the one number worth reading from across the room. */
   /* Wraps rather than overflows when a wide total meets a narrow popover. */
@@ -125,8 +127,11 @@
     margin: 0 -5px; padding: 0 5px; border-radius: 4px;
   }
   .apps .row:hover { background: var(--hover); }
+  /* The app pinned on the history chart; a shade past hover, so hovering
+     another row leaves it plain which one stays. */
+  .apps .row.pin { background: var(--track); }
   /* The one place text can be selected, so a name or a figure can be copied. */
-  .apps .row { -webkit-user-select: text; user-select: text; cursor: auto; }
+  .apps .row { -webkit-user-select: text; user-select: text; cursor: pointer; }
   .apps .ic { -webkit-user-drag: none; }
   .apps .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .apps .vl { text-align: right; font-weight: 500; white-space: nowrap; }
@@ -199,6 +204,7 @@
   #tip tr.sub td.k { color: var(--faint); padding-left: 14px; }
   #tip tr.sub td.v { font-weight: 400; color: var(--dim); }
   #tip tr.tot td { border-top: 1px solid var(--rule); padding-top: 4px; }
+  #tip tr.all td { color: var(--faint); font-weight: 400; }
   #tip .sw { width: 7px; height: 7px; border-radius: 2px; display: inline-block; margin-right: 6px; }
   /* The link line grows with detail (metered, low data mode, manual pin); if
      it ever outgrows the popover it truncates rather than wrapping. */
@@ -271,6 +277,8 @@ let APPNOW = "__APPNOW__";
 let APPSFROM = "__APPSFROM__";
 // The app whose usage the history chart is showing, while one is hovered.
 let HIGHLIGHT = null;
+// The app clicked to stay on the history chart, shown whenever none is hovered.
+let PINNED = null;
 let LIVE  = "__LIVE__";
 
 // Loaded by poll() as a hidden frame, this page is only a courier: it hands
@@ -384,6 +392,27 @@ function showTip(evt, d) {
   tip.classList.add("show");
   place(evt);
 }
+
+// A period of the history chart as one app saw it: its figure per class,
+// against all the traffic then. Per class only — the series carries no
+// down/up split.
+function appTip(evt, d, hl, i) {
+  const s = k => hl.s[k][i] || 0;
+  const t = CLASSES.reduce((a, [k]) => a + s(k), 0);
+  const rows = CLASSES.filter(([k]) => s(k) > 0).map(([k, name]) =>
+    `<tr><td class="k"><i class="sw" style="background:var(--${k})"></i>${name}</td>` +
+    `<td class="v">${fmt(s(k))}</td></tr>`).join("");
+  const all = `<tr class="all"><td class="k">All traffic</td><td class="v">${fmt(total(d))}</td></tr>`;
+  tip.innerHTML = `<div class="when">${d.title} · ${esc(shortName(hl.name))}</div>` +
+    (!d.tracked || i < (hl.a0 ?? 0) ? `<div style="color:var(--faint)">Not tracked yet</div>`
+     : t === 0 ? `<div style="color:var(--faint)">No traffic</div><table>${all}</table>`
+     : `<table>${rows}<tr class="tot"><td class="k">Total</td><td class="v">${fmt(t)}</td></tr>${all}</table>`);
+  tip.classList.add("show");
+  place(evt);
+}
+
+// "Ghostty › claude" is claude, where there is only room for one name.
+const shortName = name => name.split(" › ").pop();
 
 function place(evt) {
   const pad = 14, r = tip.getBoundingClientRect();
@@ -567,8 +596,9 @@ function draw(data, chartId, axisId, capId, everyNth, hl) {
   const sum = data.reduce((a,d) => a + total(d), 0);
   // Naming the peak explains the scale: without it, one big hour makes every
   // other point look like nothing went on.
-  el(capId).textContent = peak === 0 ? ""
-    : hl ? `${hl.name.split(" › ").pop()} · ${fmt(CLASSES.reduce((a, [k]) => a + hl.s[k].reduce((b, v) => b + v, 0), 0))} of ${fmt(sum)}`
+  el(capId).innerHTML = peak === 0 ? ""
+    : hl ? esc(`${shortName(hl.name)} · ${fmt(CLASSES.reduce((a, [k]) => a + hl.s[k].reduce((b, v) => b + v, 0), 0))} of ${fmt(sum)}`) +
+           (hl.pinned ? UNPIN : "")
     : `${fmt(sum)} · peak ${fmt(peak)}`;
 
   // Tracking starts once and runs on, so the tracked periods are a suffix.
@@ -583,7 +613,12 @@ function draw(data, chartId, axisId, capId, everyNth, hl) {
   const W = chart.clientWidth, H = chart.clientHeight, n = data.length;
   const x = i => (i + 0.5) * W / n;
   const vals = data.slice(t0).flatMap(d => active.map(([k]) => val(d, k)));
-  const y = scale(chart, peak, Math.min(...vals.filter(v => v > 0)));
+  // The app's lines go on the same scale, so it has to reach them too. They
+  // should sit under the whole, but nettop can credit an app with more than
+  // the link carried, and a line off the top of the chart says nothing.
+  const hlVals = hl ? active.flatMap(([k]) => hl.s[k].slice(t0)) : [];
+  const y = scale(chart, Math.max(peak, ...hlVals),
+    Math.min(...vals.concat(hlVals).filter(v => v > 0)));
 
   let svg = `<svg width="${W}" height="${H}"><defs>`;
   for (const [k] of active) {
@@ -639,13 +674,18 @@ function draw(data, chartId, axisId, capId, everyNth, hl) {
         guide.setAttribute("x1", x(i));
         guide.setAttribute("x2", x(i));
         guide.style.opacity = 1;
+        // With an app pinned, on its lines only, where they are drawn.
+        const pin = hl && hl.pinned, a0 = Math.max(t0, hl?.a0 ?? t0);
         dots.forEach(c => {
+          const k = c.dataset.k;
+          const on = !pin || (i >= a0 && hl.s[k].some(v => v > 0));
           c.setAttribute("cx", x(i));
-          c.setAttribute("cy", y(val(d, c.dataset.k)));
-          c.style.opacity = 1;
+          c.setAttribute("cy", y(pin ? hl.s[k][i] || 0 : val(d, k)));
+          c.style.opacity = on ? 1 : 0;
         });
       }
-      showTip(e, d);
+      if (hl && hl.pinned) appTip(e, d, hl, i);
+      else showTip(e, d);
     });
     h.addEventListener("mousemove", place);
     h.addEventListener("mouseleave", clear);
@@ -683,10 +723,46 @@ function render() {
   drawHistory();
 }
 
+const UNPIN = ` <span class="unpin" title="Unpin (esc)">×</span>`;
+
+// An app's usage per period, by class, from the index, value pairs it comes
+// as — the periods it used nothing in left out.
+const unpack = (s, n) => Object.fromEntries(CLASSES.map(([k]) => {
+  const v = Array(n).fill(0), p = s[k] || [];
+  for (let j = 0; j < p.length; j += 2) v[p[j]] = p[j + 1];
+  return [k, v];
+}));
+
 function drawHistory() {
   const r = range();
-  const app = HIGHLIGHT && r.apps.list.find(a => a.name === HIGHLIGHT);
-  draw(r.data, "hist", "axis-hist", "cap-hist", r.every, app && {...app, a0: r.apps.a0});
+  const name = HIGHLIGHT || PINNED;
+  const app = name && [...r.apps.list, ...r.apps.more].find(a => a.name === name);
+  draw(r.data, "hist", "axis-hist", "cap-hist", r.every, app &&
+    {...app, s: unpack(app.s, r.data.length), a0: r.apps.a0, pinned: name === PINNED});
+  // Another timeframe's pin, with nothing here to draw.
+  if (PINNED && name === PINNED && !app && el("cap-hist").textContent) {
+    el("cap-hist").innerHTML = `${esc(shortName(PINNED))} · none in this timeframe${UNPIN}`;
+  }
+}
+
+// Pins the app, or unpins it if it already is.
+function pin(name) {
+  PINNED = PINNED === name ? null : name;
+  // Shown at once rather than when the pointer next moves: the row under it
+  // may have just been swapped for another.
+  HIGHLIGHT = null;
+  tip.classList.remove("show");
+  apps();
+  drawHistory();
+}
+
+// A click on a row, unless it ends a drag that selected some of its text, or
+// is the second of a double-click, which selects a word: the first did the
+// clicking already. `f` gets the row's app, or nothing for "Other".
+function onRowClick(box, f) {
+  box.querySelectorAll(".row").forEach(row => row.addEventListener("click", e => {
+    if (!selecting() && e.detail < 2) f(row.dataset.app);
+  }));
 }
 
 // One app's row: its icon, name, what it is moving right now, its mobile
@@ -702,7 +778,8 @@ function appRow(a, i, all) {
   const now = a.name && APPNOW[a.name];
   const rate = now ? now[0] + now[1] : 0;
   const share = all ? total(a) / all : 0;
-  return `<div class="row${a.name ? "" : " other"}" data-i="${i}"${a.name ? "" : ` title="Show all apps"`}>${icon}` +
+  const cls = !a.name ? " other" : a.name === PINNED ? " pin" : "";
+  return `<div class="row${cls}" data-i="${i}"${a.name ? ` data-app="${esc(a.name)}"` : ` title="Show all apps"`}>${icon}` +
     `<span class="nm">${a.name ? esc(tool) : `${a.n} other app${a.n === 1 ? "" : "s"}`}` +
     `${owner ? ` <span class="own">in ${esc(owner)}</span>` : ""}</span>` +
     // Under 1 KB/s is background chatter, not an app at work.
@@ -746,9 +823,19 @@ const appsSince = from => APPSFROM && APPSFROM > from ? `Since ${day(APPSFROM)}`
 // which app that is.
 function apps() {
   const r = range();
-  const {list, other, from} = r.apps;
+  let {list, other} = r.apps;
+  // An app pinned from the full list takes the last named row, whose own
+  // figures go to "Other" in its place: the card stays one height, and its
+  // rows still add up to the whole.
+  const extra = PINNED && !list.some(a => a.name === PINNED) && r.apps.more.find(a => a.name === PINNED);
+  if (extra) {
+    const out = list[list.length - 1];
+    list = [...list.slice(0, -1), extra];
+    other = {n: other.n, ...Object.fromEntries(CLASSES.map(([k]) =>
+      [k, [0, 1].map(j => other[k][j] - extra[k][j] + out[k][j])]))};
+  }
   const box = el("apps");
-  el("cap-apps").textContent = appsSince(from);
+  el("cap-apps").textContent = appsSince(r.apps.from);
   const rows = other ? [...list, {...other, name: null}] : list;
   if (!rows.length) {
     box.innerHTML = `<div class="none">No app traffic recorded yet</div>`;
@@ -757,9 +844,7 @@ function apps() {
   fillApps(box, rows,
     a => { if (a.name) { HIGHLIGHT = a.name; drawHistory(); } },
     () => { if (HIGHLIGHT) { HIGHLIGHT = null; drawHistory(); } });
-  const more = box.querySelector(".other");
-  // Not when the click ends a drag that selected some of its text.
-  if (more) more.addEventListener("click", () => { if (!selecting()) openSheet(true); });
+  onRowClick(box, app => app ? pin(app) : openSheet(true));
   sheet();
 }
 
@@ -793,6 +878,9 @@ function sheet() {
   // Redrawn as fresh data comes in, under a list that may be scrolled.
   const top = box.scrollTop;
   fillApps(box, rows);
+  // Pinning goes back to the card, where the chart shows it; unpinning stays,
+  // to pick another.
+  onRowClick(box, app => { pin(app); if (PINNED) openSheet(false); });
   box.scrollTop = top;
 }
 
@@ -876,6 +964,7 @@ if (!COURIER) {
   // when it opens.
   window.addEventListener("keydown", e => {
     if (e.key === "Escape" && SHEET) return openSheet(false);
+    if (e.key === "Escape" && PINNED) return pin(PINNED);
     // A menu bar app may have no Edit menu to carry ⌘C to the web view, so
     // copy here too. Copying twice, where it does, is harmless.
     if (e.metaKey && e.key === "c" && selecting()) return document.execCommand("copy");
@@ -886,6 +975,8 @@ if (!COURIER) {
     if (next) pick(next.key);
   });
   el("sheet-back").addEventListener("click", () => openSheet(false));
+  // On the caption, which outlives the redraws that replace the ×.
+  el("cap-hist").addEventListener("click", e => { if (e.target.closest(".unpin")) pin(PINNED); });
   apps();
   render();
   // In case the web view is sized after the page first lays out.

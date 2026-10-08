@@ -367,45 +367,41 @@ impl Store {
             })
     }
 
-    /// Each of these apps' totals per class for each slot
-    /// `[bounds[i], bounds[i + 1])`, as `series_at` gives them for everything.
-    pub fn app_series_at(
-        &self,
-        bounds: &[i64],
-        apps: &[&str],
-    ) -> rusqlite::Result<HashMap<String, Vec<Totals>>> {
+    /// Every app's totals per class for each slot `[bounds[i], bounds[i + 1])`,
+    /// as `series_at` gives them for everything. In one pass over the range
+    /// rather than one per app: the table is keyed by hour first, so asking
+    /// app by app would read the whole range again for each.
+    pub fn app_series_at(&self, bounds: &[i64]) -> rusqlite::Result<HashMap<String, Vec<Totals>>> {
         let slots = bounds.len().saturating_sub(1);
-        let mut out: HashMap<String, Vec<Totals>> = apps
-            .iter()
-            .map(|a| (a.to_string(), vec![Totals::new(); slots]))
-            .collect();
+        let mut out: HashMap<String, Vec<Totals>> = HashMap::new();
         let (Some(&from), Some(&to)) = (bounds.first(), bounds.last()) else {
             return Ok(out);
         };
         let mut stmt = self.conn.prepare(
-            "SELECT hour, class, rx, tx FROM app_usage WHERE app = ?1 AND hour >= ?2 AND hour < ?3",
+            "SELECT app, hour, class, rx, tx FROM app_usage WHERE hour >= ?1 AND hour < ?2",
         )?;
-        for app in apps {
-            let rows = stmt.query_map(params![app, from, to], |r| {
-                Ok((
-                    r.get::<_, i64>(0)?,
-                    r.get::<_, String>(1)?,
-                    r.get::<_, i64>(2)?,
-                    r.get::<_, i64>(3)?,
-                ))
-            })?;
-            let series = out.get_mut(*app).expect("seeded above");
-            for row in rows {
-                let (hour, k, rx, tx) = row?;
-                let Some(class) = Class::from_key(&k) else {
-                    continue;
-                };
-                let idx = bounds.partition_point(|&b| b <= hour).wrapping_sub(1);
-                if let Some(totals) = series.get_mut(idx) {
-                    let e = totals.entry(class).or_insert((0, 0));
-                    e.0 += rx as u64;
-                    e.1 += tx as u64;
-                }
+        let rows = stmt.query_map(params![from, to], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, i64>(1)?,
+                r.get::<_, String>(2)?,
+                r.get::<_, i64>(3)?,
+                r.get::<_, i64>(4)?,
+            ))
+        })?;
+        for row in rows {
+            let (app, hour, k, rx, tx) = row?;
+            let Some(class) = Class::from_key(&k) else {
+                continue;
+            };
+            let idx = bounds.partition_point(|&b| b <= hour).wrapping_sub(1);
+            let series = out
+                .entry(app)
+                .or_insert_with(|| vec![Totals::new(); slots]);
+            if let Some(totals) = series.get_mut(idx) {
+                let e = totals.entry(class).or_insert((0, 0));
+                e.0 += rx as u64;
+                e.1 += tx as u64;
             }
         }
         Ok(out)
