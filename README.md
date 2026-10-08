@@ -18,8 +18,9 @@ plugin. No app bundle, no code signing.
 - **Menu bar** — live throughput, e.g. `↓1.2M ↑340K`, refreshed every 2 seconds
 - **Left-click** — the popover: totals, a history chart and the apps that used
   the most, for today, 24 hours, 7 days, 30 days or all time; and live
-  throughput. Hovering any period or app gives the exact split, and clicking
-  *N other apps* opens the full list of every app in the timeframe
+  throughput. Hovering any period or app gives the exact split, clicking an
+  app pins it on the history chart, and clicking *N other apps* opens the full
+  list of every app in the timeframe
 - **Right-click** — *Count this network as Mobile*, *Back to automatic*,
   *Reveal database*
 
@@ -126,9 +127,17 @@ used the most, each with its icon, its share of the total, and any mobile use
 as its own figure in orange; everything else is summed into one "Other" row,
 so the rows add up. Apps busy right now show their current rate. Hovering an
 app draws its usage on the history chart, over the whole traffic faded back —
-so a spike can be pinned on whoever caused it. The rows keep their order as
+so a spike can be put down to whoever caused it. The rows keep their order as
 apps go busy and quiet: a row moving under the pointer would change which app
 the chart is showing.
+
+Clicking an app pins it: it stays on the chart after the pointer leaves the
+row, and hovering a period then gives that app's figure for it, against all the
+traffic at the time. The caption names the pinned app with an × to unpin it;
+Escape or another click on the row does too. Apps in the full list can be
+pinned as well. One from outside the top five takes the card's fifth row, and
+the app it displaces joins "Other", so the card keeps its height and its rows
+still add up. The pin holds across tabs until the popover closes.
 
 Each chart draws one line per class, so mobile and Wi-Fi can be compared
 directly, against labelled gridlines. **Linear | Log** in the footer switches
