@@ -395,9 +395,7 @@ impl Store {
                 continue;
             };
             let idx = bounds.partition_point(|&b| b <= hour).wrapping_sub(1);
-            let series = out
-                .entry(app)
-                .or_insert_with(|| vec![Totals::new(); slots]);
+            let series = out.entry(app).or_insert_with(|| vec![Totals::new(); slots]);
             if let Some(totals) = series.get_mut(idx) {
                 let e = totals.entry(class).or_insert((0, 0));
                 e.0 += rx as u64;
